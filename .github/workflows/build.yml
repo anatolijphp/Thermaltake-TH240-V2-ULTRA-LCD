@@ -45,6 +45,20 @@ jobs:
         shell: pwsh
         run: Compress-Archive build/windows/app/* build/windows/TTLcdStudio-portable.zip
 
+      # the WPF window rendered off-screen, to compare with the Linux (GTK) screenshots
+      - name: Screenshots
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory shots | Out-Null
+          foreach ($p in 'dashboard','modes','device','settings') {
+            Start-Process build/windows/app/TTLcdStudio.exe -ArgumentList "--screenshot `"$PWD/shots/windows-$p.png`" $p" -Wait
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-windows
+          path: shots/
+
       - uses: actions/upload-artifact@v4
         with:
           name: TTLcdStudio-windows
@@ -59,7 +73,7 @@ jobs:
 
       # Mono's C# compiler builds the same sources (build.sh takes the file list from build.cmd)
       - name: Install Mono
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq mono-devel >/dev/null
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mono-devel libgtk3.0-cil-dev >/dev/null
 
       - name: Build
         run: ./build.sh
@@ -78,7 +92,20 @@ jobs:
             ttlcd config | grep -q "Mode = Clock"
             ttlcd probe || true
             test -s /tmp/clock.jpg && test -f /lib/udev/rules.d/60-ttlcd.rules && test -f /usr/lib/systemd/user/ttlcd.service
+            # the Studio window under a virtual X display, one PNG per page
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb xauth fonts-ubuntu >/dev/null
+            mkdir -p /pkg/shots
+            for p in dashboard modes device settings; do
+              xvfb-run -a -s "-screen 0 1400x1000x24" ttlcd-studio --screenshot /pkg/shots/linux-$p.png $p
+            done
+            test -s /pkg/shots/linux-dashboard.png
           '
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-linux
+          path: build/linux/shots/
 
       - uses: actions/upload-artifact@v4
         with:

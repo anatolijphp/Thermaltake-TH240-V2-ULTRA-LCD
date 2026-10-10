@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=TT LCD Studio
+Comment=Screen software for the Thermaltake TH240 V2 Ultra cooler LCD
+Exec=ttlcd-studio
+Icon=ttlcd-studio
+Categories=Utility;System;
+Terminal=false
+StartupWMClass=TTLcdStudio.exe
