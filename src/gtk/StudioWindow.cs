@@ -330,7 +330,7 @@ namespace TtLcd.GtkUi
             connText = new Label(""); connText.StyleContext.AddClass("semibold");
             fpsText = new Label(""); fpsText.StyleContext.AddClass("status");
             row.PackStart(connDot, false, false, 0); row.PackStart(connText, false, false, 0); row.PackEnd(fpsText, false, false, 0);
-            modeText = new Label("") { Halign = Align.Start, MarginTop = 6, Wrap = true, Xalign = 0 };
+            modeText = new Label("") { Halign = Align.Start, MarginTop = 6, Wrap = true, Xalign = 0, MaxWidthChars = 44 };
             modeText.StyleContext.AddClass("dim");
             cb.PackStart(row, false, false, 0); cb.PackStart(modeText, false, false, 0);
             card.Add(cb);

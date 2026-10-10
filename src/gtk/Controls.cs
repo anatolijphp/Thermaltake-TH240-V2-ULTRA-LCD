@@ -252,7 +252,7 @@ namespace TtLcd.GtkUi
 
         public static Label Text(string text, params string[] classes)
         {
-            var l = new Label(text) { Halign = Align.Start, Xalign = 0, Wrap = true };
+            var l = new Label(text) { Halign = Align.Start, Xalign = 0, Wrap = true, MaxWidthChars = 60 };
             foreach (var c in classes) l.StyleContext.AddClass(c);
             return l;
         }
@@ -264,6 +264,7 @@ namespace TtLcd.GtkUi
             var l = new Label(label) { Halign = Align.Start, Xalign = 0, WidthRequest = labelWidth, Valign = Align.Center };
             l.StyleContext.AddClass("dim");
             row.PackStart(l, false, false, 0);
+            if (control.Valign == Align.Fill) control.Valign = Align.Center;
             row.PackStart(control, value == null ? false : true, value != null || control.Hexpand, 0);
             if (value != null) { value.WidthRequest = 56; value.Xalign = 1; value.StyleContext.AddClass("semibold"); row.PackStart(value, false, false, 0); }
             return row;

@@ -24,19 +24,20 @@ namespace TtLcd.GtkUi
             idleTitle = new Label("Idle image") { Halign = Align.Start }; idleTitle.StyleContext.AddClass("semibold");
             b.PackStart(idleTitle, false, false, 0);
             var hint = Ui.Text("The cooler shows this by itself when the PC isn't driving the screen (boot, sleep, powered off).", "dim", "small");
+            hint.MaxWidthChars = 44;
             hint.MarginTop = 4; b.PackStart(hint, false, false, 0);
 
             idleEditBox = new Box(Orientation.Vertical, 0) { MarginTop = 12, NoShowAll = true };
             idleZoom = new Slider(1, 5, 0); idleZoomT = new Label("1.0×");
             idleZoom.Changed += v => { idle.SetZoom(v); idleZoomT.Text = v.ToString("0.0") + "×"; QueueIdleEncode(); };
             idleEditBox.PackStart(Ui.Row("Zoom", idleZoom, idleZoomT, 48), false, false, 0);
-            idleInfo = Ui.Text("", "status");
+            idleInfo = Ui.Text("", "status"); idleInfo.MaxWidthChars = 44;
             idleEditBox.PackStart(idleInfo, false, false, 0);
             b.PackStart(idleEditBox, false, false, 0);
 
             idleBar = new ProgressBar { MarginTop = 12, NoShowAll = true };
             b.PackStart(idleBar, false, false, 0);
-            idleStatus = Ui.Text("", "dim", "small"); idleStatus.MarginTop = 8;
+            idleStatus = Ui.Text("", "dim", "small"); idleStatus.MarginTop = 8; idleStatus.MaxWidthChars = 44;
             b.PackStart(idleStatus, false, false, 0);
             card.Add(b);
 
