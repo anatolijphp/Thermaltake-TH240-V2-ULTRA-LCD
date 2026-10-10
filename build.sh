@@ -20,8 +20,8 @@ CORE=$(list CORE)
 STUDIO=$(list STUDIO)
 REFS="-r:System.Drawing.dll -r:System.Windows.Forms.dll -r:System.Xml.dll -r:System.Core.dll -r:System.ServiceProcess.dll -r:System.Management.dll"
 OUT=build/linux
-PKG=$OUT/pkg
-PKGS=$OUT/pkg-studio
+PKG=$PWD/$OUT/pkg
+PKGS=$PWD/$OUT/pkg-studio
 LIB=$PKG/usr/lib/ttlcd
 rm -rf "$OUT"
 mkdir -p "$LIB" "$PKG/usr/bin" "$PKG/lib/udev/rules.d" "$PKG/usr/lib/systemd/user" "$PKG/DEBIAN"
