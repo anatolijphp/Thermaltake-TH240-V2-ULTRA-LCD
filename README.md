@@ -100,7 +100,7 @@ TT LCD Studio runs on Ubuntu too, with the same look: a native GTK window over t
 <img src="docs/media/ubuntu-dashboard.png" alt="TT LCD Studio on Ubuntu: dashboard and live preview" width="860">
 
 ```
-sudo apt install ./ttlcd_1.1.0_all.deb    # from the release; pulls in Mono and GTK#
+sudo apt install ./ttlcd_1.2.0_all.deb    # from the release; pulls in Mono and GTK#
 ttlcd-studio                              # or "TT LCD Studio" in the app menu
 ```
 
