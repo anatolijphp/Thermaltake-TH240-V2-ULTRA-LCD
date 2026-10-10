@@ -2,7 +2,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'ci/**']
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -10,8 +10,6 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -54,9 +52,53 @@ jobs:
             build/windows/TTLcdStudio-Setup.exe
             build/windows/TTLcdStudio-portable.zip
 
-      - name: Release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Mono's C# compiler builds the same sources (build.sh takes the file list from build.cmd)
+      - name: Install Mono
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mono-devel >/dev/null
+
+      - name: Build
+        run: ./build.sh
+
+      # A clean Ubuntu with nothing but the .deb and its dependencies: proves the package installs and the
+      # renderer works there (the cooler itself isn't attached to CI).
+      - name: Package test (clean Ubuntu 24.04)
+        run: |
+          docker run --rm -v "$PWD/build/linux:/pkg" ubuntu:24.04 sh -ec '
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd_*_all.deb >/dev/null
+            ttlcd >/dev/null || true
+            ttlcd render /tmp/clock.jpg Clock
+            ttlcd render /tmp/colour.jpg Color
+            ttlcd set Mode Clock
+            ttlcd config | grep -q "Mode = Clock"
+            ttlcd probe || true
+            test -s /tmp/clock.jpg && test -f /lib/udev/rules.d/60-ttlcd.rules && test -f /usr/lib/systemd/user/ttlcd.service
+          '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ttlcd-linux
+          path: |
+            build/linux/*.deb
+            build/linux/*.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" build/windows/TTLcdStudio-Setup.exe build/windows/TTLcdStudio-portable.zip --title "${{ github.ref_name }}" --generate-notes
+        run: gh release create "${{ github.ref_name }}" dist/* --repo "${{ github.repository }}" --title "${{ github.ref_name }}" --generate-notes

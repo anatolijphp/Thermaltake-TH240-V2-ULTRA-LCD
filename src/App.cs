@@ -634,7 +634,7 @@ namespace TtLcd
             return g;
         }
 
-        // "Water every 2 s · CPU temperature every 1.5 s · CPU load and RAM every 1 s", from measured intervals:
+        // "Coolant every 2 s · CPU temperature every 1.5 s · CPU load and RAM every 1 s", from measured intervals:
         // water = time between the last two readings from the cooler; CPU temperature = the helper's own
         // update timestamps; CPU load / RAM = this page's 1 s refresh. Stale or missing sources say so.
         long helperTicks; int helperPeriodMs;
@@ -646,10 +646,10 @@ namespace TtLcd
             {
                 long age = e.CoolantAtMs < 0 ? -1 : Engine.NowMs - e.CoolantAtMs;
                 int period = e.CoolantPeriodMs;
-                if (age < 0) parts.Add("Water: waiting for the cooler");
-                else if (period > 0 && age > 3 * period + 2000) parts.Add("Water: no reading for " + Secs(age));
-                else if (!Render.WaterValid(e.Coolant)) parts.Add("Water sensor reads open");
-                else parts.Add("Water every " + (period > 0 ? Secs(period) : "…"));
+                if (age < 0) parts.Add("Coolant: waiting for the cooler");
+                else if (period > 0 && age > 3 * period + 2000) parts.Add("Coolant: no reading for " + Secs(age));
+                else if (!Render.WaterValid(e.Coolant)) parts.Add("Coolant sensor reads open");
+                else parts.Add("Coolant every " + (period > 0 ? Secs(period) : "…"));
             }
             if (cfg.DashCpuTemp)
             {
@@ -749,7 +749,7 @@ namespace TtLcd
                 Defs = new[] {
                     new ItemDef { Id = Render.IdTime, Name = "Time", Get = c => c.ShowTime, Set = (c, v) => c.ShowTime = v },
                     new ItemDef { Id = Render.IdDate, Name = "Date", Get = c => c.ShowDate, Set = (c, v) => c.ShowDate = v },
-                    new ItemDef { Id = Render.IdWater, Name = "Water temperature", Get = c => c.ShowWaterTemp, Set = (c, v) => c.ShowWaterTemp = v },
+                    new ItemDef { Id = Render.IdWater, Name = "Coolant temperature", Get = c => c.ShowWaterTemp, Set = (c, v) => c.ShowWaterTemp = v },
                     new ItemDef { Id = Render.IdCpuTemp, Name = "CPU temperature", Get = c => c.ShowCpuTemp, Set = (c, v) => c.ShowCpuTemp = v },
                     new ItemDef { Id = Render.IdLoad, Name = "CPU load", Get = c => c.ShowCpuLoad, Set = (c, v) => c.ShowCpuLoad = v },
                 },
@@ -761,7 +761,7 @@ namespace TtLcd
                 Panel = "OvItems",
                 Defs = new[] {
                     new ItemDef { Id = Render.IdTime, Name = "Time", Get = c => c.OverlayTime, Set = (c, v) => c.OverlayTime = v },
-                    new ItemDef { Id = Render.IdWater, Name = "Water temperature", Get = c => c.OverlayWaterTemp, Set = (c, v) => c.OverlayWaterTemp = v },
+                    new ItemDef { Id = Render.IdWater, Name = "Coolant temperature", Get = c => c.OverlayWaterTemp, Set = (c, v) => c.OverlayWaterTemp = v },
                     new ItemDef { Id = Render.IdCpuTemp, Name = "CPU temperature", Get = c => c.OverlayCpuTemp, Set = (c, v) => c.OverlayCpuTemp = v },
                 },
                 GetLines = c => Render.Lines(c.OverlayOrder, c.OverlayLayout, c.OverlayBreaks, Render.OverlayIds),

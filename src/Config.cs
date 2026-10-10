@@ -24,7 +24,7 @@ namespace TtLcd
         public TextEffect Effect = TextEffect.Shadow;
         public int Rgb = 0xFFFFFF;
         public bool ByTemp = false;     // colour by value (cool cyan -> hot red)
-        public bool Label = true;       // "Water: 31°C" vs "31°C"
+        public bool Label = true;       // "Coolant: 31°C" vs "31°C"
         public bool LabelAbove = false; // label small above the value instead of beside it
         public bool Fahrenheit = false;
         public int Size = 54;           // px on the 480 px screen
@@ -91,7 +91,7 @@ namespace TtLcd
         public string FontName = "Segoe UI";
         public bool FontBold = true, FontItalic = false;
         public TextEffect TextEffect = TextEffect.Shadow;
-        public bool ShowLabels = true;      // "Water 31°C" vs "31°C"
+        public bool ShowLabels = true;      // "Coolant 31°C" vs "31°C"
         public bool Fahrenheit = false;
         public bool ColorByTemp = false;    // temperatures coloured cool (cyan) -> hot (red)
         public int OverlayPos = 0;          // 0 bottom, 1 top, 2 centre

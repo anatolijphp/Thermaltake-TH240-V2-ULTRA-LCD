@@ -29,7 +29,7 @@ rem So move the current binaries aside, build fresh ones, and delete the leftove
 del /q %APP%\*.old >nul 2>nul
 for %%f in (ttlcd.exe TTLcdStudio.exe TTLcdAura.dll) do if exist %APP%\%%f ren %APP%\%%f %%f.%RANDOM%.old
 del /q %APP%\*.old >nul 2>nul
-set CORE=src\Version.cs src\Hid.cs src\Lcd.cs src\Render.cs src\Capture.cs src\Config.cs src\Engine.cs src\Video.cs src\VirtualDisplay.cs src\Aura.cs src\Storage.cs src\Sensors.cs src\Games.cs
+set CORE=src\Version.cs src\Hid.cs src\LinuxHid.cs src\Lcd.cs src\Render.cs src\Capture.cs src\Config.cs src\Engine.cs src\Video.cs src\VirtualDisplay.cs src\Aura.cs src\Storage.cs src\Sensors.cs src\Games.cs
 
 echo [1/6] ttlcd.exe
 "%CSC%" /nologo /optimize+ /unsafe /platform:x64 /target:exe /main:TtLcd.Program /win32icon:src\app.ico /out:%APP%\ttlcd.exe %REFS% %CORE% src\Program.cs || exit /b 1

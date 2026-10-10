@@ -45,10 +45,14 @@ namespace TtLcd
         // can lock up the cooler's image decoder until a full power cycle. Open/Dispose on the same thread.
         public static Lcd Open()
         {
-            var m = new System.Threading.Mutex(false, @"Global\TTLcd.Device");
-            bool mine;
-            try { mine = m.WaitOne(0); }
-            catch (System.Threading.AbandonedMutexException) { mine = true; } // previous owner was killed
+            // (Mono keeps named mutexes inside one process, so on Linux this guards only against this process.)
+            System.Threading.Mutex m = null;
+            try { m = new System.Threading.Mutex(false, Os.Linux ? "TTLcd.Device" : @"Global\TTLcd.Device"); }
+            catch (Exception) { if (!Os.Linux) throw; }
+            bool mine = true;
+            if (m != null)
+                try { mine = m.WaitOne(0); }
+                catch (System.Threading.AbandonedMutexException) { mine = true; } // previous owner was killed
             if (!mine) { m.Dispose(); throw new IOException("Cooler is in use by another TT LCD program (Studio or ttlcd.exe)."); }
             var r = new Lcd { owner = m };
             try
@@ -108,12 +112,16 @@ namespace TtLcd
         // call: abandoning it would let it swallow the next reply, so every later query would time out too.
         readonly byte[] readBuf = new byte[CtrlPacket + 1];
         IAsyncResult pendingRead;
+        // Windows returns [report ID][report]; Linux hidraw returns the report alone, so it is read in after a 0 byte.
         int ReadCtrl(int timeoutMs)
         {
-            if (pendingRead == null) pendingRead = ctrl.BeginRead(readBuf, 0, readBuf.Length, null, null);
+            int skip = Os.Linux ? 1 : 0;
+            if (pendingRead == null) pendingRead = ctrl.BeginRead(readBuf, skip, readBuf.Length - skip, null, null);
             if (!pendingRead.AsyncWaitHandle.WaitOne(timeoutMs)) return -1;
             var ar = pendingRead; pendingRead = null;
-            return ctrl.EndRead(ar);
+            int n = ctrl.EndRead(ar);
+            if (skip > 0) { readBuf[0] = 0; n += skip; }
+            return n;
         }
 
         // ---- on-device storage (what the cooler shows on its own: idle/standby picture, boot animation) ----

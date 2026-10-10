@@ -1,0 +1,4 @@
+# TT LCD: let the logged-in user (and the plugdev group) talk to the Thermaltake CL-W383 cooler's LCD over hidraw.
+# 264A:233C = Thermaltake firmware, 1A2C:151D = LX800 firmware on the same board.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="264a", ATTRS{idProduct}=="233c", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1a2c", ATTRS{idProduct}=="151d", MODE="0660", GROUP="plugdev", TAG+="uaccess"

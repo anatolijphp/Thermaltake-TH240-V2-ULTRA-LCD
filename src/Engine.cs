@@ -68,7 +68,7 @@ namespace TtLcd
 
         public void Start()
         {
-            timeBeginPeriod(1); // default 15.6 ms sleep granularity caps pacing well below 30 fps
+            if (!Os.Linux) timeBeginPeriod(1); // default 15.6 ms sleep granularity caps pacing well below 30 fps
             renderThread = new Thread(RenderLoop) { IsBackground = true, Name = "lcd-render" };
             sendThread = new Thread(SendLoop) { IsBackground = true, Name = "lcd-send" };
             var gameThread = new Thread(GameLoop) { IsBackground = true, Name = "lcd-games", Priority = ThreadPriority.BelowNormal };
@@ -95,12 +95,12 @@ namespace TtLcd
             {
                 var c = cfg;
                 string g = null;
-                if (c.GameDetect) try { g = GameDetect.Detect(c); } catch (Exception) { }
+                if (c.GameDetect && !Os.Linux) try { g = GameDetect.Detect(c); } catch (Exception) { }
                 if (g == null && forceGame) g = ManualGame;
                 Game = g;
                 // slow the CPU-temperature helper down while gaming (0 = its default)
                 int want = g != null ? Math.Max(1000, c.GameSensorMs) : 0;
-                if (want != sensorMs) { Sensors.RequestInterval(want); sensorMs = want; }
+                if (want != sensorMs && !Os.Linux) { Sensors.RequestInterval(want); sensorMs = want; }
                 newFrame.Set();
                 gameWake.WaitOne(3000); // next check, or at once when game mode is forced on/off
             }
@@ -113,7 +113,22 @@ namespace TtLcd
             gameWake.Set();
             if (renderThread != null) renderThread.Join(3000);
             if (sendThread != null) sendThread.Join(4000);
-            timeEndPeriod(1);
+            if (!Os.Linux) timeEndPeriod(1);
+        }
+
+        // One frame of the current mode as a JPEG, without a cooler (`ttlcd render`; CI checks the Linux build with it).
+        public byte[] RenderOnce()
+        {
+            var c = cfg;
+            if (c.Mode == Mode.Off) return BlackJpeg();
+            int delay; string note; byte[] direct;
+            using (var frame = Produce(c, out delay, out note, out direct))
+            {
+                if (c.Mode != Mode.Clock && (c.OverlayTime || c.OverlayCpuTemp || c.OverlayWaterTemp))
+                    Render.DrawOverlay(frame, c, CpuTemp.C(), Coolant);
+                Render.Rotate(frame, c.Rotation);
+                return Render.Jpeg(frame, c.Quality);
+            }
         }
 
         void Publish(byte[] jpeg, int rotation)
@@ -541,9 +556,24 @@ namespace TtLcd
         public static int Percent()
         {
             if ((DateTime.UtcNow - lastAt).TotalMilliseconds < 900) return last;
-            long idle, kernel, user;
-            if (!GetSystemTimes(out idle, out kernel, out user)) return last;
-            long total = kernel + user; // kernel includes idle
+            long idle, kernel, user, total;
+            if (Os.Linux)
+            {
+                // /proc/stat "cpu  user nice system idle iowait irq softirq steal ..." (jiffies)
+                try
+                {
+                    var f = File.ReadAllLines("/proc/stat")[0].Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    total = 0;
+                    for (int i = 1; i < f.Length && i <= 8; i++) total += long.Parse(f[i]);
+                    idle = long.Parse(f[4]) + (f.Length > 5 ? long.Parse(f[5]) : 0);
+                }
+                catch (Exception) { return last; }
+            }
+            else
+            {
+                if (!GetSystemTimes(out idle, out kernel, out user)) return last;
+                total = kernel + user; // kernel includes idle
+            }
             long dt = total - lastTotal, di = idle - lastIdle;
             if (lastTotal != 0 && dt > 0) last = (int)Math.Round(100.0 * (dt - di) / dt);
             lastIdle = idle; lastTotal = total; lastAt = DateTime.UtcNow;
@@ -560,6 +590,7 @@ namespace TtLcd
         {
             if ((DateTime.UtcNow - at).TotalMilliseconds < 1500) return last;
             at = DateTime.UtcNow;
+            if (Os.Linux) { last = LinuxCpuTemp(); return last; }
             int t = Sensors.CpuTempC();
             if (t >= 0) { last = t; return last; }
             try
@@ -576,6 +607,30 @@ namespace TtLcd
             last = -1;
             return last;
         }
+
+        // Linux: the CPU sensor driver's hwmon node (AMD k10temp/zenpower: Tctl/Tdie, Intel coretemp: package),
+        // no extra software or rights needed.
+        static string hwmonFile;
+        static int LinuxCpuTemp()
+        {
+            try
+            {
+                if (hwmonFile == null && Directory.Exists("/sys/class/hwmon"))
+                    foreach (var d in Directory.GetDirectories("/sys/class/hwmon"))
+                    {
+                        string name = Path.Combine(d, "name");
+                        if (!File.Exists(name)) continue;
+                        string n = File.ReadAllText(name).Trim();
+                        if (n != "k10temp" && n != "zenpower" && n != "coretemp" && n != "cpu_thermal") continue;
+                        if (File.Exists(Path.Combine(d, "temp1_input"))) { hwmonFile = Path.Combine(d, "temp1_input"); break; }
+                    }
+                if (hwmonFile == null) return -1;
+                int milli = int.Parse(File.ReadAllText(hwmonFile).Trim());
+                int c = (int)Math.Round(milli / 1000.0);
+                return c > 0 && c < 150 ? c : -1;
+            }
+            catch (Exception) { hwmonFile = null; return -1; }
+        }
     }
 
     // Physical RAM load (percent) via GlobalMemoryStatusEx.
@@ -586,6 +641,23 @@ namespace TtLcd
         [DllImport("kernel32.dll")] static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX m);
         public static int PercentUsed()
         {
+            if (Os.Linux)
+            {
+                // /proc/meminfo: MemTotal and MemAvailable in kB
+                try
+                {
+                    long total = 0, avail = 0;
+                    foreach (var line in File.ReadAllLines("/proc/meminfo"))
+                    {
+                        var f = line.Split(new[] { ' ', ':' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (f.Length < 2) continue;
+                        if (f[0] == "MemTotal") total = long.Parse(f[1]);
+                        else if (f[0] == "MemAvailable") avail = long.Parse(f[1]);
+                    }
+                    return total > 0 ? (int)Math.Round(100.0 * (total - avail) / total) : 0;
+                }
+                catch (Exception) { return 0; }
+            }
             var m = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX)) };
             return GlobalMemoryStatusEx(ref m) ? (int)m.dwMemoryLoad : 0;
         }

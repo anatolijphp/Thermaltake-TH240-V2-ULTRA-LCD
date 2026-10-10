@@ -1,0 +1,3 @@
+# shell scripts and Linux packaging files must keep LF line endings
+*.sh text eol=lf
+linux/* text eol=lf

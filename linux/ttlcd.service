@@ -1,0 +1,11 @@
+# systemd user service: systemctl --user enable --now ttlcd
+[Unit]
+Description=TT LCD: Thermaltake CL-W383 cooler screen
+
+[Service]
+ExecStart=/usr/bin/ttlcd run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

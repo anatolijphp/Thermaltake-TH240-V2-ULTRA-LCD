@@ -21,9 +21,9 @@ USB protocol.
 |  |  |
 |---|---|
 | 🖥️ **Nine display modes** | Wallpaper Engine (via a bundled 480×480 virtual monitor), screen mirror, image, GIF, video, colour, clock, Aura Sync, off |
-| 🕒 **Clock and sensor face** | Time, date, water temperature from the cooler's own sensor, CPU temperature and load. Drag readings into lines, style each one |
+| 🕒 **Clock and sensor face** | Time, date, coolant temperature from the cooler's own sensor, CPU temperature and load. Drag readings into lines, style each one |
 | 🌈 **Aura Sync** | Shows up in ASUS Armoury Crate as a device; its effects drive a MilkDrop-style visualiser on the LCD |
-| 📊 **Dashboard** | Live gauges for water, CPU temperature, CPU load and RAM |
+| 📊 **Dashboard** | Live gauges for coolant, CPU temperature, CPU load and RAM |
 | 🎮 **Game mode** | Detects games and lowers the frame rate and sensor polling, or hands the screen back to the cooler's idle picture |
 | 🖼️ **Idle picture** | Crop, compress, upload and verify the picture the cooler shows on its own |
 | 🔄 **One rotation setting** | Turns the live picture and the cooler's own idle and boot screens together |
@@ -60,7 +60,7 @@ Streaming 30 frames a second to the cooler costs a little CPU and USB time. Game
   - **Lower frame rate**: keep the screen alive at a frame rate you choose (default 5 fps)
   - **Show idle screen**: stop streaming completely, so the cooler shows its own idle picture
   - **Keep going**: change nothing
-- **Slower sensor polling** while gaming (default every 10 s) for the water and CPU temperature.
+- **Slower sensor polling** while gaming (default every 10 s) for the coolant and CPU temperature.
 - **Force it on** any time with the gamepad button in the title bar or the switch in Settings, for example for a game
   that isn't detected. The title bar shows when game mode is on.
 
@@ -120,7 +120,7 @@ uninstall smoke test, then the installer and portable zip as artifacts. Tags `v*
 
 ```
 ttlcd info                  serial, type, rotation
-ttlcd temp                  water temperature from the cooler's sensor
+ttlcd temp                  coolant temperature from the cooler's sensor
 ttlcd image <file>          show a picture
 ttlcd stream [-m N]         mirror a monitor
 ttlcd service install       CPU temperature service (admin, one time)

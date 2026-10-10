@@ -66,6 +66,7 @@ namespace TtLcd
         // queryCaps=false skips opening each interface for report sizes: on this cooler that query blocks ~5 s on MI_00.
         public static List<HidDeviceInfo> Enumerate(ushort vid, ushort pid, bool queryCaps = true)
         {
+            if (Os.Linux) return LinuxHid.Enumerate(vid, pid);
             var list = new List<HidDeviceInfo>();
             Guid g; HidD_GetHidGuid(out g);
             IntPtr set = SetupDiGetClassDevs(ref g, IntPtr.Zero, IntPtr.Zero, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
@@ -125,6 +126,7 @@ namespace TtLcd
 
         public static FileStream Open(string path)
         {
+            if (Os.Linux) return LinuxHid.Open(path);
             var h = CreateFile(path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, IntPtr.Zero);
             if (h.IsInvalid) throw new IOException("Cannot open HID device (in use by TT RGB Plus?): error " + Marshal.GetLastWin32Error());
             return new FileStream(h, FileAccess.ReadWrite, 1, true);

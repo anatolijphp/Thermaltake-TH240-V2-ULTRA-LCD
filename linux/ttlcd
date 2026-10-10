@@ -1,0 +1,3 @@
+#!/bin/sh
+# TT LCD command-line tool (Mono). See 'ttlcd' for the commands, 'ttlcd run' for the screen service.
+exec mono /usr/lib/ttlcd/ttlcd.exe "$@"

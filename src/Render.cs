@@ -128,7 +128,7 @@ namespace TtLcd
         class Seg
         {
             public string Text; public Color Col; public float Size; public int Id; public ElementStyle St;
-            public string Above;  // label drawn small above the value ("Water" over "31°C"), or null
+            public string Above;  // label drawn small above the value ("Coolant" over "31°C"), or null
             public Seg(int id, string t, ElementStyle st, Color c) { Id = id; Text = t; St = st; Size = Math.Max(8, st.Size); Col = c; }
             public float LabelSize { get { return Size * 0.42f; } }
             public float Height { get { return Size * 1.2f + (Above != null ? LabelSize * 1.15f : 0); } }   // unscaled
@@ -366,7 +366,7 @@ namespace TtLcd
             {
                 case IdTime: return new Seg(id, now.ToString("HH:mm"), st, c);
                 case IdDate: return new Seg(id, now.ToString("ddd d MMM"), st, c);
-                case IdWater: return Labelled(id, "Water", Deg(water, st.Fahrenheit), st, st.ByTemp ? Heat(water, 25, 45) : c);
+                case IdWater: return Labelled(id, "Coolant", Deg(water, st.Fahrenheit), st, st.ByTemp ? Heat(water, 25, 45) : c);
                 case IdCpuTemp: return Labelled(id, "CPU", Deg(cpuTemp, st.Fahrenheit), st, st.ByTemp ? Heat(cpuTemp, 35, 90) : c);
                 default: return Labelled(id, "Load", cpuLoad + "%", st, st.ByTemp ? Heat(cpuLoad, 0, 100) : c);
             }
@@ -413,7 +413,7 @@ namespace TtLcd
         public static void DrawDashboard(Bitmap bmp, Config cfg, double waterC, int cpuTemp, int cpuLoad, int ramPct)
         {
             var items = new List<Gauge>();
-            if (cfg.DashWater && waterC >= -5 && waterC <= 99) items.Add(new Gauge("WATER", Math.Round(waterC) + "°", (waterC - 20) / 40.0, Color.FromArgb(80, 180, 255)));
+            if (cfg.DashWater && waterC >= -5 && waterC <= 99) items.Add(new Gauge("COOLANT", Math.Round(waterC) + "°", (waterC - 20) / 40.0, Color.FromArgb(80, 180, 255)));
             if (cfg.DashCpuLoad) items.Add(new Gauge("CPU", cpuLoad + "%", cpuLoad / 100.0, Color.FromArgb(255, 90, 90)));
             if (cfg.DashCpuTemp && cpuTemp > 0) items.Add(new Gauge("CPU °C", cpuTemp.ToString(), (cpuTemp - 20) / 70.0, Color.FromArgb(255, 170, 60)));
             if (cfg.DashRam) items.Add(new Gauge("RAM", ramPct + "%", ramPct / 100.0, Color.FromArgb(120, 220, 120)));
