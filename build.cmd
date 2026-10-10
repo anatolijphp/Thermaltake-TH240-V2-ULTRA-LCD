@@ -30,11 +30,13 @@ del /q %APP%\*.old >nul 2>nul
 for %%f in (ttlcd.exe TTLcdStudio.exe TTLcdAura.dll) do if exist %APP%\%%f ren %APP%\%%f %%f.%RANDOM%.old
 del /q %APP%\*.old >nul 2>nul
 set CORE=src\Version.cs src\Hid.cs src\LinuxHid.cs src\Lcd.cs src\Render.cs src\Capture.cs src\Config.cs src\Engine.cs src\Video.cs src\VirtualDisplay.cs src\Aura.cs src\Storage.cs src\Sensors.cs src\Games.cs
+rem Studio logic shared by the Windows (WPF) and Linux (GTK) front ends
+set STUDIO=src\Studio.cs src\StudioModel.cs src\Readings.cs src\IdleEditor.cs src\Platform.cs
 
 echo [1/6] ttlcd.exe
 "%CSC%" /nologo /optimize+ /unsafe /platform:x64 /target:exe /main:TtLcd.Program /win32icon:src\app.ico /out:%APP%\ttlcd.exe %REFS% %CORE% src\Program.cs || exit /b 1
 echo [2/6] TTLcdStudio.exe
-"%CSC%" /nologo /optimize+ /unsafe /platform:x64 /target:winexe /main:TtLcd.TrayProgram /win32icon:src\app.ico /resource:src\app.ico,TtLcd.app.ico /out:%APP%\TTLcdStudio.exe %REFS% %WPF% /resource:src\MainWindow.xaml,TtLcd.MainWindow.xaml %CORE% src\App.cs src\Record.cs src\Gif.cs || exit /b 1
+"%CSC%" /nologo /optimize+ /unsafe /platform:x64 /target:winexe /main:TtLcd.TrayProgram /win32icon:src\app.ico /resource:src\app.ico,TtLcd.app.ico /out:%APP%\TTLcdStudio.exe %REFS% %WPF% /resource:src\MainWindow.xaml,TtLcd.MainWindow.xaml %CORE% %STUDIO% src\App.cs src\Record.cs src\Gif.cs || exit /b 1
 echo [3/6] TTLcdAura.dll
 "%CSC%" /nologo /optimize+ /platform:anycpu /target:library /out:%APP%\TTLcdAura.dll /r:System.Core.dll aura\AuraHal.cs || exit /b 1
 echo [4/6] rescue tools

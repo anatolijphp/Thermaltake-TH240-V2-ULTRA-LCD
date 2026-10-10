@@ -78,21 +78,17 @@ namespace TtLcd
         }
     }
 
-    // Owns the engine, tray icon and (lazily) the main window.
+    // Windows front end: the tray icon and (lazily) the WPF window on top of the shared StudioCore.
     class Shell
     {
-        public readonly Engine Engine;
+        public readonly StudioCore Core;
+        public Engine Engine { get { return Core.Engine; } }
         readonly WinForms.NotifyIcon icon;
-        readonly DispatcherTimer saveTimer;
         MainUi ui;
 
         public Shell(bool startHidden)
         {
-            Engine = new Engine(Config.Load());
-            Engine.Start();
-
-            saveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
-            saveTimer.Tick += (s, e) => { saveTimer.Stop(); try { Engine.Config.Save(); } catch (Exception) { } };
+            Core = new StudioCore(new WindowsPlatform());
 
             var menu = new WinForms.ContextMenuStrip();
             var modes = new WinForms.ToolStripMenuItem("Mode");
@@ -136,13 +132,7 @@ namespace TtLcd
             if (!startHidden) ShowWindow();
         }
 
-        public void Change(Action<Config> edit)
-        {
-            var c = Engine.Config.Clone();
-            edit(c);
-            Engine.Config = c;
-            saveTimer.Stop(); saveTimer.Start();
-        }
+        public void Change(Action<Config> edit) { Core.Change(edit); }
 
         public void ShowWindow()
         {
@@ -168,9 +158,7 @@ namespace TtLcd
         {
             icon.Visible = false;
             icon.Dispose();
-            saveTimer.Stop();
-            try { Engine.Config.Save(); } catch (Exception) { }
-            Engine.Stop();
+            Core.Shutdown();
             Application.Current.Shutdown();
         }
 
@@ -205,6 +193,8 @@ namespace TtLcd
     partial class MainUi
     {
         readonly Shell shell;
+        readonly StudioModel model;
+        readonly IdleEditor idle;
         readonly Window w;
         readonly DispatcherTimer previewTimer, statusTimer, videoApply, thumbTimer;
         bool loading;
@@ -219,6 +209,8 @@ namespace TtLcd
         public MainUi(Shell shell)
         {
             this.shell = shell;
+            model = new StudioModel(shell.Core);
+            idle = new IdleEditor(shell.Core);
             using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("TtLcd.MainWindow.xaml"))
                 w = (Window)XamlReader.Load(s);
             WrapSegGroups(w, (Style)w.FindResource("Seg"));
@@ -275,7 +267,7 @@ namespace TtLcd
             statusTimer.Tick += (s, e) => UpdateStatus();
 
             // first run: the current live rotation is taken as "upright on this mount" for the preview
-            if (shell.Engine.Config.PreviewMount < 0) { int r0 = shell.Engine.Config.Rotation; shell.Change(c => c.PreviewMount = r0); }
+            model.InitMount();
             Load(shell.Engine.Config);
             UpdateDashboard();
             previewTimer.Start(); statusTimer.Start();
@@ -435,9 +427,9 @@ namespace TtLcd
             }
             if (page == "idle")
             {
-                idleTriedRead = true; F<CheckBox>("PvIdle").IsChecked = true; page = "dashboard";
+                idle.TriedRead = true; F<CheckBox>("PvIdle").IsChecked = true; page = "dashboard";
                 var img = Environment.GetEnvironmentVariable("TTLCD_SHOT_IDLE"); // dev aid: show a picture being placed
-                if (!string.IsNullOrEmpty(img)) { var cfg0 = shell.Engine.Config; LoadIdle(img); F<Slider>("IdleZoom").Value = 1.6; idlePanX = 60; EncodeIdle(); shell.Engine.Config = cfg0; orig = cfg0; }
+                if (!string.IsNullOrEmpty(img)) { var cfg0 = shell.Engine.Config; LoadIdle(img); F<Slider>("IdleZoom").Value = 1.6; idle.Pan(60, 0); EncodeIdle(); shell.Engine.Config = cfg0; orig = cfg0; }
             }
             string nav = page == "device" ? "NavDevice" : page == "settings" ? "NavSettings" : page == "dashboard" ? "NavDashboard" : "NavModes";
             F<RadioButton>(nav).IsChecked = true;
@@ -560,9 +552,7 @@ namespace TtLcd
             var grid = F<UniformGrid>("DbTiles");
             int n = grid.Children.Cast<UIElement>().Count(c => c.Visibility != Visibility.Collapsed);
             if (n == 0) return;
-            int fit = Math.Max(1, Math.Min(n, (int)(grid.ActualWidth / 200)));
-            int rows = (n + fit - 1) / fit;
-            int cols = (n + rows - 1) / rows;
+            int cols = StudioModel.GaugeColumns(n, grid.ActualWidth);
             if (grid.Columns != cols) grid.Columns = cols;
         }
 
@@ -634,47 +624,6 @@ namespace TtLcd
             return g;
         }
 
-        // "Coolant every 2 s · CPU temperature every 1.5 s · CPU load and RAM every 1 s", from measured intervals:
-        // water = time between the last two readings from the cooler; CPU temperature = the helper's own
-        // update timestamps; CPU load / RAM = this page's 1 s refresh. Stale or missing sources say so.
-        long helperTicks; int helperPeriodMs;
-        string DashNote(Config cfg, int cpuTemp)
-        {
-            var e = shell.Engine;
-            var parts = new System.Collections.Generic.List<string>();
-            if (cfg.DashWater)
-            {
-                long age = e.CoolantAtMs < 0 ? -1 : Engine.NowMs - e.CoolantAtMs;
-                int period = e.CoolantPeriodMs;
-                if (age < 0) parts.Add("Coolant: waiting for the cooler");
-                else if (period > 0 && age > 3 * period + 2000) parts.Add("Coolant: no reading for " + Secs(age));
-                else if (!Render.WaterValid(e.Coolant)) parts.Add("Coolant sensor reads open");
-                else parts.Add("Coolant every " + (period > 0 ? Secs(period) : "…"));
-            }
-            if (cfg.DashCpuTemp)
-            {
-                long t = Sensors.HelperUpdatedTicks();
-                if (t != 0 && t != helperTicks)
-                {
-                    if (helperTicks != 0) helperPeriodMs = (int)((t - helperTicks) / TimeSpan.TicksPerMillisecond);
-                    helperTicks = t;
-                }
-                parts.Add(cpuTemp <= 0 ? "CPU temperature: not available"
-                    : "CPU temperature every " + (helperPeriodMs > 0 ? Secs(helperPeriodMs) : "…"));
-            }
-            var fast = new System.Collections.Generic.List<string>();
-            if (cfg.DashCpuLoad) fast.Add("CPU load");
-            if (cfg.DashRam) fast.Add("RAM");
-            if (fast.Count > 0) parts.Add(string.Join(" and ", fast) + " every 1 s");
-            return parts.Count == 0 ? "" : "Updates: " + string.Join(" · ", parts) + ".";
-        }
-
-        static string Secs(long ms)
-        {
-            double s = ms / 1000.0;
-            return (s < 10 ? s.ToString("0.#") : Math.Round(s).ToString("0")) + " s";
-        }
-
         DispatcherTimer dashTimer;
         bool dashOpen = true;   // the dashboard is the start page
         void UpdateDashboard()
@@ -685,20 +634,16 @@ namespace TtLcd
             F<FrameworkElement>("DbTileCpuTemp").Visibility = cfg.DashCpuTemp ? Visibility.Visible : Visibility.Collapsed;
             F<FrameworkElement>("DbTileRam").Visibility = cfg.DashRam ? Visibility.Visible : Visibility.Collapsed;
             LayoutDashboard();
-            var now = DateTime.Now;
-            double water = shell.Engine.Coolant;
-            bool wOk = water >= -5 && water <= 99;
-            int ct = CpuTemp.C(), ram = Mem.PercentUsed(), load = Cpu.Percent();
-            SetGauge("DbWater", wOk ? Math.Round(water) + "°" : "--", wOk ? (water - 20) / 30 : 0);
-            SetGauge("DbCpuTemp", ct > 0 ? ct + "°" : "n/a", ct > 0 ? (ct - 20) / 75.0 : 0);
-            SetGauge("DbCpuLoad", load + "%", load / 100.0);
-            SetGauge("DbRam", ram + "%", ram / 100.0);
-            F<FrameworkElement>("CpuTempRow").Visibility = ct > 0 || SensorService.Installed ? Visibility.Collapsed : Visibility.Visible;
-            F<TextBlock>("DbNote").Text = DashNote(cfg, ct);
+            var d = model.Readings();
+            SetGauge("DbWater", d.Coolant.Text, d.Coolant.Frac);
+            SetGauge("DbCpuTemp", d.CpuTemp.Text, d.CpuTemp.Frac);
+            SetGauge("DbCpuLoad", d.CpuLoad.Text, d.CpuLoad.Frac);
+            SetGauge("DbRam", d.Ram.Text, d.Ram.Frac);
+            F<FrameworkElement>("CpuTempRow").Visibility = d.ShowCpuTempHint ? Visibility.Visible : Visibility.Collapsed;
+            F<TextBlock>("DbNote").Text = d.Note;
         }
 
         // ---------------- modes page ----------------
-        static readonly int[] Palette = { 0x000000, 0xFFFFFF, 0xFF2B45, 0xFF7A00, 0xFFD400, 0x2BE36B, 0x00D1FF, 0x2B6BFF, 0x8A3BFF, 0xFF3BD2 };
 
         void WireModes()
         {
@@ -743,30 +688,7 @@ namespace TtLcd
             BindRadio("OvBottom", c => c.OverlayPos == 0, c => c.OverlayPos = 0);
 
             // reading lists, arranged into lines by drag and drop
-            itemLists.Add(new ItemList
-            {
-                Panel = "ClkItems",
-                Defs = new[] {
-                    new ItemDef { Id = Render.IdTime, Name = "Time", Get = c => c.ShowTime, Set = (c, v) => c.ShowTime = v },
-                    new ItemDef { Id = Render.IdDate, Name = "Date", Get = c => c.ShowDate, Set = (c, v) => c.ShowDate = v },
-                    new ItemDef { Id = Render.IdWater, Name = "Coolant temperature", Get = c => c.ShowWaterTemp, Set = (c, v) => c.ShowWaterTemp = v },
-                    new ItemDef { Id = Render.IdCpuTemp, Name = "CPU temperature", Get = c => c.ShowCpuTemp, Set = (c, v) => c.ShowCpuTemp = v },
-                    new ItemDef { Id = Render.IdLoad, Name = "CPU load", Get = c => c.ShowCpuLoad, Set = (c, v) => c.ShowCpuLoad = v },
-                },
-                GetLines = c => Render.Lines(c.ClockOrder, c.ClockLayout, c.ClockBreaks, Render.ClockIds),
-                SetOrder = (c, v) => c.ClockOrder = v,
-            });
-            itemLists.Add(new ItemList
-            {
-                Panel = "OvItems",
-                Defs = new[] {
-                    new ItemDef { Id = Render.IdTime, Name = "Time", Get = c => c.OverlayTime, Set = (c, v) => c.OverlayTime = v },
-                    new ItemDef { Id = Render.IdWater, Name = "Coolant temperature", Get = c => c.OverlayWaterTemp, Set = (c, v) => c.OverlayWaterTemp = v },
-                    new ItemDef { Id = Render.IdCpuTemp, Name = "CPU temperature", Get = c => c.OverlayCpuTemp, Set = (c, v) => c.OverlayCpuTemp = v },
-                },
-                GetLines = c => Render.Lines(c.OverlayOrder, c.OverlayLayout, c.OverlayBreaks, Render.OverlayIds),
-                SetOrder = (c, v) => c.OverlayOrder = v,
-            });
+            foreach (var rl in ReadingList.All) itemLists.Add(new ItemList { List = rl });
             loaders.Add(c => RebuildItems());
             // alignment of the whole block (clock face and overlay share it)
             foreach (var pre in new[] { "", "Ov" })
@@ -805,19 +727,15 @@ namespace TtLcd
         // A reading list (clock face or overlay) shown as the screen's lines: each row holds the chips of one line.
         // Click a chip to turn it on or off; drag it onto a line to place it beside the others there, or between /
         // above / below the lines to give it a line of its own. Empty lines disappear. Saved as "0,2|3|".
-        class ItemDef { public int Id; public string Name; public Func<Config, bool> Get; public Action<Config, bool> Set; }
+        // The WPF side of a ReadingList: its rows of chips and the mouse-drag state (the line logic is in LineDrag).
         class ItemList
         {
-            public string Panel; public ItemDef[] Defs;
-            public Func<Config, System.Collections.Generic.List<System.Collections.Generic.List<int>>> GetLines;
-            public Action<Config, string> SetOrder;
-            // built UI and drag state
+            public ReadingList List;
+            public string Panel { get { return List.Panel; } }
             public StackPanel Rows; public Canvas Overlay;
             public FrameworkElement DragChip; public int DragId; public string DragName; public Point DragStart; public bool Dragging;
             public Border Ghost;
-            // drag preview: lines without the dragged reading, the lines shown (with it at the target), and the target
-            public System.Collections.Generic.List<System.Collections.Generic.List<int>> Base, Display;
-            public int NewRowIdx = -1, TLine, TIndex; public bool TNew;
+            public LineDrag Drag;
         }
         readonly System.Collections.Generic.List<ItemList> itemLists = new System.Collections.Generic.List<ItemList>();
 
@@ -825,7 +743,7 @@ namespace TtLcd
 
         // Selected reading (its style is edited in the Text style panel); null = none selected.
         ItemList selList; int selId;
-        bool IsOverlayList(ItemList l) { return l.Panel == "OvItems"; }
+        bool IsOverlayList(ItemList l) { return l.List.Overlay; }
 
         void BuildItems(ItemList l)
         {
@@ -835,7 +753,7 @@ namespace TtLcd
             l.Rows.Children.Clear();
             var dim = (Brush)w.FindResource("Dim");
             var accent = (Brush)w.FindResource("Accent");
-            var lines = l.Dragging && l.Display != null ? l.Display : l.GetLines(cfg);
+            var lines = l.Dragging && l.Drag != null ? l.Drag.Display : l.List.GetLines(cfg);
             for (int i = 0; i < lines.Count; i++)
             {
                 var row = new DockPanel { MinHeight = 36, Tag = i, Background = Brushes.Transparent }; // compact line height
@@ -846,14 +764,14 @@ namespace TtLcd
                 row.Children.Add(chips);
                 foreach (int id in lines[i])
                 {
-                    var chip = MakeChip(l, l.Defs.First(d => d.Id == id), cfg, dim, accent);
+                    var chip = MakeChip(l, l.List.Def(id), cfg, dim, accent);
                     if (l.Dragging && id == l.DragId) { chip.Opacity = 0.4; chip.IsHitTestVisible = false; } // drop preview
                     chips.Children.Add(chip);
                 }
                 if (lines[i].Count == 0)
                 {
                     var b = MakeBlankLine(l, i, dim);
-                    if (l.Dragging && l.DragId == EmptyLineId && i == l.NewRowIdx) b.Opacity = 0.4;
+                    if (l.Dragging && l.Drag != null && l.DragId == EmptyLineId && i == l.Drag.NewRowIdx) b.Opacity = 0.4;
                     chips.Children.Add(b);
                 }
                 l.Rows.Children.Add(row);
@@ -873,7 +791,7 @@ namespace TtLcd
             l.Rows.Children.Add(pal);
         }
 
-        const int EmptyLineId = -1;
+        const int EmptyLineId = ReadingList.EmptyLineId;
 
         // Placeholder shown in a blank line; × removes the line.
         FrameworkElement MakeBlankLine(ItemList l, int index, Brush dim)
@@ -886,10 +804,7 @@ namespace TtLcd
             x.MouseLeftButtonUp += (s, e) =>
             {
                 e.Handled = true;
-                var lines = l.GetLines(shell.Engine.Config);
-                if (index < lines.Count && lines[index].Count == 0) lines.RemoveAt(index);
-                string order = Render.LinesToString(lines);
-                Change(c => l.SetOrder(c, order));
+                l.List.RemoveBlankLine(shell.Core, index);
                 BuildItems(l);
             };
             return new Border
@@ -927,8 +842,7 @@ namespace TtLcd
             {
                 if (l.Dragging) return;
                 e.Handled = true;
-                bool v = !def.Get(shell.Engine.Config);
-                Change(c => def.Set(c, v));
+                l.List.Toggle(shell.Core, def.Id);
                 SetPanels(); BuildItems(l);
             };
             pill.PreviewMouseLeftButtonDown += (s, e) => { l.DragChip = pill; l.DragId = def.Id; l.DragName = def.Name; l.DragStart = e.GetPosition(F<Grid>(l.Panel)); };
@@ -955,20 +869,18 @@ namespace TtLcd
         bool SelectedVisible()
         {
             if (selList == null) return false;
-            var m = shell.Engine.Config.Mode;
-            return IsOverlayList(selList) ? m != Mode.Clock && m != Mode.Off : m == Mode.Clock;
+            return selList.List.ShownIn(shell.Engine.Config.Mode);
         }
 
         // ---- Text style panel: edits the selected reading's style ----
         bool styleLoading;
 
-        ElementStyle CurStyle() { return shell.Engine.Config.Style(IsOverlayList(selList), selId); }
+        ElementStyle CurStyle() { return selList.List.Style(shell.Engine.Config, selId); }
 
         void EditStyle(Action<ElementStyle> edit)
         {
-            if (styleLoading || selList == null) return;
-            bool ov = IsOverlayList(selList); int id = selId;
-            Change(c => { var st = c.Style(ov, id).Clone(); edit(st); c.SetStyle(ov, st); });
+            if (styleLoading || selList == null || loading) return;
+            selList.List.EditStyle(shell.Core, selId, edit);
         }
 
         void WireStyleEditor()
@@ -1000,7 +912,7 @@ namespace TtLcd
         {
             if (selList == null) { SetPanels(); return; }
             var st = CurStyle();
-            var def = selList.Defs.First(d => d.Id == selId);
+            var def = selList.List.Def(selId);
             styleLoading = true;
             F<TextBlock>("StTitle").Text = "TEXT STYLE · " + def.Name.ToUpperInvariant() + (IsOverlayList(selList) ? " (OVERLAY)" : "");
             var fontBox = F<ComboBox>("TxtFont");
@@ -1012,7 +924,7 @@ namespace TtLcd
             F<RadioButton>(st.Fahrenheit ? "UnitF" : "UnitC").IsChecked = true;
             F<RadioButton>(!st.Label ? "LblNone" : st.LabelAbove ? "LblAbove" : "LblBeside").IsChecked = true;
             F<CheckBox>("TxtByTemp").IsChecked = st.ByTemp;
-            bool temp = selId == Render.IdWater || selId == Render.IdCpuTemp, reading = temp || selId == Render.IdLoad;
+            bool temp = ReadingList.IsTemperature(selId), reading = ReadingList.IsReading(selId);
             foreach (var n in new[] { "StUnitsLabel", "StUnits" }) F<FrameworkElement>(n).Visibility = temp ? Visibility.Visible : Visibility.Collapsed;
             foreach (var n in new[] { "StReadingLabel", "StReading" }) F<FrameworkElement>(n).Visibility = reading ? Visibility.Visible : Visibility.Collapsed;
             styleLoading = false;
@@ -1054,20 +966,8 @@ namespace TtLcd
         {
             if (selList != null) { var sl = selList; selList = null; if (sl != l) BuildItems(sl); SetPanels(); }
             l.Dragging = true;
-            int id = l.DragId;
-            l.Base = l.GetLines(shell.Engine.Config);
-            l.TNew = true; l.TLine = l.Base.Count; l.TIndex = 0;
-            if (id != EmptyLineId)
-                for (int i = 0; i < l.Base.Count; i++)
-                {
-                    int k = l.Base[i].IndexOf(id);
-                    if (k < 0) continue;
-                    l.Base[i].RemoveAt(k);
-                    if (l.Base[i].Count == 0) { l.Base.RemoveAt(i); l.TNew = true; l.TLine = i; }   // it was alone: its line goes
-                    else { l.TNew = false; l.TLine = i; l.TIndex = k; }
-                    break;
-                }
-            ApplyDropPreview(l);
+            l.Drag = LineDrag.Begin(l.List, shell.Engine.Config, l.DragId);
+            BuildItems(l);
             // the ghost must exist before CaptureMouse: capturing raises a nested mouse-move right away
             l.Ghost = new Border
             {
@@ -1081,37 +981,19 @@ namespace TtLcd
             host.CaptureMouse(); // take the mouse from the chip so it isn't clicked on release
         }
 
-        // Display = base lines with the dragged reading inserted at the target (or a blank line for "Empty line").
-        void ApplyDropPreview(ItemList l)
-        {
-            var d = l.Base.Select(x => new System.Collections.Generic.List<int>(x)).ToList();
-            if (l.TNew)
-            {
-                int at = Math.Min(l.TLine, d.Count);
-                d.Insert(at, l.DragId == EmptyLineId ? new System.Collections.Generic.List<int>() : new System.Collections.Generic.List<int> { l.DragId });
-                l.NewRowIdx = at;
-            }
-            else
-            {
-                d[l.TLine].Insert(Math.Min(l.TIndex, d[l.TLine].Count), l.DragId);
-                l.NewRowIdx = -1;
-            }
-            l.Display = d;
-            BuildItems(l);
-        }
-
         // Works out the target from the preview on screen (rows map back to base lines around the preview row).
         void UpdateDropTarget(ItemList l, Grid host, Point p)
         {
             var rows = l.Rows.Children.Cast<FrameworkElement>().Where(r => r.Tag is int).ToList();
-            Func<int, int> toBase = r => l.NewRowIdx >= 0 && r > l.NewRowIdx ? r - 1 : r;
-            bool tNew = true; int tLine = l.Base.Count, tIndex = 0;
+            var d = l.Drag;
+            Func<int, int> toBase = d.ToBase;
+            bool tNew = true; int tLine = d.Base.Count, tIndex = 0;
             for (int r = 0; r < rows.Count; r++)
             {
                 double top = rows[r].TranslatePoint(new Point(0, 0), host).Y, h = rows[r].ActualHeight, mid = top + h / 2;
                 if (Math.Abs(p.Y - mid) <= h * 0.32)
                 {
-                    if (r == l.NewRowIdx) { tNew = true; tLine = l.NewRowIdx; }                    // over its own preview row
+                    if (r == d.NewRowIdx) { tNew = true; tLine = d.NewRowIdx; }                    // over its own preview row
                     else if (l.DragId == EmptyLineId) { tNew = true; tLine = toBase(r) + (p.Y >= mid ? 1 : 0); }
                     else
                     {
@@ -1122,11 +1004,9 @@ namespace TtLcd
                     }
                     break;
                 }
-                if (p.Y < mid) { tNew = true; tLine = r == l.NewRowIdx + 1 && l.NewRowIdx >= 0 ? l.NewRowIdx : toBase(r); break; }
+                if (p.Y < mid) { tNew = true; tLine = r == d.NewRowIdx + 1 && d.NewRowIdx >= 0 ? d.NewRowIdx : toBase(r); break; }
             }
-            if (tNew == l.TNew && tLine == l.TLine && (tNew || tIndex == l.TIndex)) return;
-            l.TNew = tNew; l.TLine = tLine; l.TIndex = tIndex;
-            ApplyDropPreview(l);
+            if (d.Target(tNew, tLine, tIndex)) BuildItems(l);
         }
 
         void EndLineDrag(ItemList l, Grid host, bool drop)
@@ -1136,14 +1016,8 @@ namespace TtLcd
             if (l.Ghost != null) { l.Overlay.Children.Remove(l.Ghost); l.Ghost = null; }
             if (host.IsMouseCaptured) host.ReleaseMouseCapture();
             l.DragChip = null;
-            if (drop && l.Display != null)
-            {
-                var lines = l.Display;
-                Render.TrimEmptyEnds(lines);
-                string order = Render.LinesToString(lines);
-                Change(c => l.SetOrder(c, order));
-            }
-            l.Base = l.Display = null; l.NewRowIdx = -1;
+            if (drop && l.Drag != null) l.List.Commit(shell.Core, l.Drag.Display);
+            l.Drag = null;
             BuildItems(l);
         }
 
@@ -1176,14 +1050,8 @@ namespace TtLcd
         // from the cooler). Choosing a new picture lets it be positioned (drag) and zoomed (wheel/slider); what is
         // shown is the exact JPEG that would be uploaded: 480x480, upright, quality lowered until
         // it fits the firmware's limit.
-        System.Drawing.Image idleSrc;              // picture being placed; null = showing the stored one
-        double idleZoom = 1, idlePanX, idlePanY;   // zoom over the "cover" scale; pan in output pixels
-        byte[] idleJpeg;                           // pending upload
-        bool idleBusy, idleTriedRead;
+        // The picture being placed, its JPEG and the store/read jobs live in IdleEditor (shared with Linux).
         DispatcherTimer idleEncode;
-        const int IdleLimit = Lcd.StandbyMaxLx;
-
-        static string IdleCache { get { return Path.Combine(Config.Folder, "idle-current.jpg"); } }
 
         void WireIdle()
         {
@@ -1193,24 +1061,24 @@ namespace TtLcd
             F<Button>("IdleBrowse").Click += (s, e) => ChooseIdle();
             F<Button>("IdleRead").Click += (s, e) => ReadIdle();
             F<Button>("IdleStore").Click += (s, e) => StoreIdle();
-            F<Button>("IdleCancel").Click += (s, e) => { DropIdleSource(); ShowStoredIdle(); };
+            F<Button>("IdleCancel").Click += (s, e) => { idle.Drop(); ShowStoredIdle(); };
             var zoom = F<Slider>("IdleZoom");
-            zoom.ValueChanged += (s, e) => { idleZoom = zoom.Value; F<TextBlock>("IdleZoomT").Text = zoom.Value.ToString("0.0") + "×"; ClampIdlePan(); QueueIdleEncode(); };
+            zoom.ValueChanged += (s, e) => { idle.SetZoom(zoom.Value); F<TextBlock>("IdleZoomT").Text = zoom.Value.ToString("0.0") + "×"; QueueIdleEncode(); };
             var hit = F<FrameworkElement>("IdleHit");
             var last = new Point(); bool dragging = false;
-            hit.MouseLeftButtonDown += (s, e) => { if (idleSrc == null) return; dragging = true; last = e.GetPosition(hit); hit.CaptureMouse(); };
+            hit.MouseLeftButtonDown += (s, e) => { if (!idle.Editing) return; dragging = true; last = e.GetPosition(hit); hit.CaptureMouse(); };
             hit.MouseMove += (s, e) =>
             {
                 if (!dragging) return;
                 var p = e.GetPosition(hit);
                 double k = Lcd.Width / Math.Max(1, hit.ActualWidth);
-                idlePanX += (p.X - last.X) * k; idlePanY += (p.Y - last.Y) * k; last = p;
-                ClampIdlePan(); QueueIdleEncode();
+                idle.Pan((p.X - last.X) * k, (p.Y - last.Y) * k); last = p;
+                QueueIdleEncode();
             };
             hit.MouseLeftButtonUp += (s, e) => { dragging = false; hit.ReleaseMouseCapture(); };
             hit.MouseWheel += (s, e) =>
             {
-                if (idleSrc == null) return;
+                if (!idle.Editing) return;
                 zoom.Value = Math.Max(zoom.Minimum, Math.Min(zoom.Maximum, zoom.Value * (e.Delta > 0 ? 1.1 : 1 / 1.1)));
             };
             idleEncode = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
@@ -1223,24 +1091,24 @@ namespace TtLcd
         {
             bool on = F<CheckBox>("PvIdle").IsChecked == true && w.IsVisible;
             shell.Engine.Suspended = on;
-            if (on && !idleBusy) F<TextBlock>("IdleStatus").Text = "Streaming paused: the cooler shows its idle screen now (after a few seconds).";
+            if (on && !idle.Busy) F<TextBlock>("IdleStatus").Text = "Streaming paused: the cooler shows its idle screen now (after a few seconds).";
         }
 
-        void SetPreviewMode(bool idle)
+        void SetPreviewMode(bool idleView)
         {
             UpdateSuspend();
             Action<string, bool> vis = (n, on) => F<FrameworkElement>(n).Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-            vis("Preview", !idle); vis("LivePanel", !idle); vis("PvHover", !idle);
-            vis("IdlePreview", idle); vis("IdlePanel", idle); vis("IdleHit", idle);
-            F<TextBlock>("PvTitle").Text = idle ? "IDLE IMAGE" : "LIVE PREVIEW";
+            vis("Preview", !idleView); vis("LivePanel", !idleView); vis("PvHover", !idleView);
+            vis("IdlePreview", idleView); vis("IdlePanel", idleView); vis("IdleHit", idleView);
+            F<TextBlock>("PvTitle").Text = idleView ? "IDLE IMAGE" : "LIVE PREVIEW";
             UpdateIdleTemp();
-            if (!idle) { F<FrameworkElement>("IdleEmpty").Visibility = Visibility.Collapsed; return; }
-            if (idleSrc != null) { EncodeIdle(); return; }
+            if (!idleView) { F<FrameworkElement>("IdleEmpty").Visibility = Visibility.Collapsed; return; }
+            if (idle.Editing) { EncodeIdle(); return; }
             ShowStoredIdle();
-            if (!File.Exists(IdleCache) && !idleTriedRead) ReadIdle(); // nothing known yet: ask the cooler once
+            if (!File.Exists(IdleEditor.Cache) && !idle.TriedRead) ReadIdle(); // nothing known yet: ask the cooler once
         }
 
-        // Water temperature ("30 C") over the idle picture, while the Idle view is on and the sensor reads.
+        // Coolant temperature ("30 C") over the idle picture, while the Idle view is on and the sensor reads.
         void UpdateIdleTemp()
         {
             var panel = F<FrameworkElement>("IdleTemp");
@@ -1272,16 +1140,15 @@ namespace TtLcd
             var img = F<Image>("IdlePreview");
             img.Source = jpg == null || jpg.Length == 0 ? null : ToImage(jpg);
             // stored picture: turned as the cooler shows it; a picture being placed stays upright for dragging
-            img.RenderTransform = idleSrc == null ? new RotateTransform(IdlePreviewAngle()) : null;
+            img.RenderTransform = idle.Editing ? null : new RotateTransform(StudioModel.IdlePreviewAngle(shell.Engine.Config));
             F<FrameworkElement>("IdleEmpty").Visibility = img.Source == null ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // Idle view without a pending picture: the stored image, and the choose / read buttons.
         void ShowStoredIdle()
         {
-            idleJpeg = null;
-            byte[] cur = null;
-            try { if (File.Exists(IdleCache)) cur = File.ReadAllBytes(IdleCache); } catch (IOException) { }
+            idle.Jpeg = null;
+            byte[] cur = IdleEditor.Stored();
             ShowIdleImage(cur);
             F<TextBlock>("IdleTitle").Text = cur != null ? "Current idle image" : "Idle image";
             F<FrameworkElement>("IdleEdit").Visibility = Visibility.Collapsed;
@@ -1302,24 +1169,9 @@ namespace TtLcd
 
         void LoadIdle(string file)
         {
-            System.Drawing.Image src;
-            try
-            {
-                string ext = Path.GetExtension(file).ToLowerInvariant();
-                if (ext == ".mp4" || ext == ".mov" || ext == ".avi" || ext == ".mkv" || ext == ".webm" || ext == ".wmv" || ext == ".m4v")
-                {
-                    double dur;
-                    src = Video.Thumbnail(new VideoOptions { Path = file, Zoom = 1, Quality = 92 }, 0, out dur);
-                    if (src == null) throw new IOException("could not decode the video");
-                }
-                else src = System.Drawing.Image.FromStream(new MemoryStream(File.ReadAllBytes(file))); // GIF: first frame
-            }
+            try { idle.Load(file); }
             catch (Exception ex) { F<TextBlock>("IdleStatus").Text = "Could not open the file: " + ex.Message; return; }
-            DropIdleSource();
-            idleSrc = src;
-            idlePanX = idlePanY = 0;
-            F<Slider>("IdleZoom").Value = 1; idleZoom = 1;
-            Change(c => c.IdlePath = file);
+            F<Slider>("IdleZoom").Value = 1;
             F<TextBlock>("IdleTitle").Text = "New idle image";
             F<TextBlock>("IdleStatus").Text = "Drag the picture to position it, scroll to zoom.";
             F<FrameworkElement>("IdleEdit").Visibility = Visibility.Visible;
@@ -1327,59 +1179,27 @@ namespace TtLcd
             F<FrameworkElement>("IdleCancel").Visibility = Visibility.Visible;
             F<FrameworkElement>("IdleRead").Visibility = Visibility.Collapsed;
             F<FrameworkElement>("IdleHit").Cursor = System.Windows.Input.Cursors.SizeAll;
-            EncodeIdle();
+            ShowEncodedIdle();
         }
 
-        void DropIdleSource() { if (idleSrc != null) { idleSrc.Dispose(); idleSrc = null; } }
+        void QueueIdleEncode() { if (idle.Editing && !idleEncode.IsEnabled) idleEncode.Start(); }
 
-        double IdleCover() { return Math.Max((double)Lcd.Width / idleSrc.Width, (double)Lcd.Height / idleSrc.Height); }
+        void EncodeIdle() { idle.Encode(); ShowEncodedIdle(); }
 
-        // keep the picture covering the whole screen
-        void ClampIdlePan()
+        void ShowEncodedIdle()
         {
-            if (idleSrc == null) return;
-            double s = IdleCover() * idleZoom;
-            double mx = Math.Max(0, (idleSrc.Width * s - Lcd.Width) / 2), my = Math.Max(0, (idleSrc.Height * s - Lcd.Height) / 2);
-            idlePanX = Math.Max(-mx, Math.Min(mx, idlePanX));
-            idlePanY = Math.Max(-my, Math.Min(my, idlePanY));
-        }
-
-        void QueueIdleEncode() { if (idleSrc != null && !idleEncode.IsEnabled) idleEncode.Start(); }
-
-        // Crop -> 480x480 -> JPEG, lowering quality until it fits the limit. Not rotated: unlike streamed frames,
-        // the idle screen is drawn by the firmware, which already shows it upright.
-        void EncodeIdle()
-        {
-            if (idleSrc == null) return;
-            using (var bmp = new System.Drawing.Bitmap(Lcd.Width, Lcd.Height, System.Drawing.Imaging.PixelFormat.Format24bppRgb))
-            {
-                using (var g = System.Drawing.Graphics.FromImage(bmp))
-                {
-                    g.Clear(System.Drawing.Color.Black);
-                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-                    double s = IdleCover() * idleZoom;
-                    float sw = (float)(idleSrc.Width * s), sh = (float)(idleSrc.Height * s);
-                    g.DrawImage(idleSrc, (float)((Lcd.Width - sw) / 2 + idlePanX), (float)((Lcd.Height - sh) / 2 + idlePanY), sw, sh);
-                }
-                int q = 92; byte[] jpg = Render.Jpeg(bmp, q);
-                while (jpg.Length > IdleLimit && q > 30) { q -= 6; jpg = Render.Jpeg(bmp, q); }
-                idleJpeg = jpg;
-                bool fits = jpg.Length <= IdleLimit;
-                F<TextBlock>("IdleInfo").Text = string.Format("480×480 JPEG · quality {0} · {1:F0} KB of {2} KB{3}",
-                    q, jpg.Length / 1024.0, IdleLimit / 1024, fits ? "" : " · too large");
-                F<Button>("IdleStore").IsEnabled = fits && !idleBusy;
-                ShowIdleImage(jpg);
-            }
+            if (!idle.Editing) return;
+            F<TextBlock>("IdleInfo").Text = idle.Info;
+            F<Button>("IdleStore").IsEnabled = idle.Fits && !idle.Busy;
+            ShowIdleImage(idle.Jpeg);
         }
 
         void SetIdleBusy(bool busy, string status)
         {
-            idleBusy = busy;
             var bar = F<ProgressBar>("IdleProgress");
             bar.Visibility = busy ? Visibility.Visible : Visibility.Collapsed; bar.Value = 0;
             foreach (var n in new[] { "IdleBrowse", "IdleRead", "IdleCancel" }) F<Button>(n).IsEnabled = !busy;
-            F<Button>("IdleStore").IsEnabled = !busy && idleJpeg != null && idleJpeg.Length <= IdleLimit;
+            F<Button>("IdleStore").IsEnabled = !busy && idle.Fits;
             if (status != null) F<TextBlock>("IdleStatus").Text = status;
             if (!busy) F<System.Windows.Shapes.Path>("IdleRing").Data = null;
         }
@@ -1411,53 +1231,23 @@ namespace TtLcd
         // Read the stored picture back from the cooler (read-only commands 0x0C/0x0D, LX800 firmware).
         void ReadIdle()
         {
-            if (idleBusy) return;
-            idleTriedRead = true;
+            if (idle.Busy) return;
             SetIdleBusy(true, shell.Engine.Connected ? "Reading the idle image from the cooler…" : "Waiting for the cooler…");
-            byte[] data = null;
-            shell.Engine.Enqueue(new Engine.DeviceJob
-            {
-                Name = "idle-read",
-                Progress = p => Ui(() => IdleProgress(p, "Reading from the cooler")),
-                Work = (lcd, prog) =>
-                {
-                    if (!lcd.SwapRedBlue) throw new IOException("reading the idle image needs the LX800 firmware");
-                    var b = lcd.ReadFileLx(Lcd.StandbyFile, prog);
-                    data = b.Length > 0 ? lcd.ForPanel(b) : b; // undo the panel's red/blue swap
-                },
-                Done = err => Ui(() =>
-                {
-                    if (err == null && data != null && data.Length > 0)
-                        try { File.WriteAllBytes(IdleCache, data); } catch (IOException) { }
-                    SetIdleBusy(false, err != null ? "Could not read it: " + err.Message
-                        : data == null || data.Length == 0 ? "The cooler has no idle image stored." : "Read from the cooler.");
-                    if (idleSrc == null) ShowStoredIdle();
-                })
-            });
+            idle.Read(p => Ui(() => IdleProgress(p, "Reading from the cooler")),
+                status => Ui(() => { SetIdleBusy(false, status); if (!idle.Editing) ShowStoredIdle(); }));
         }
 
         // Write the pending picture into the cooler's flash (LX800 only; verified by read-back). Streaming pauses.
         void StoreIdle()
         {
-            if (idleJpeg == null || idleBusy) return;
-            var jpg = idleJpeg;
+            if (idle.Jpeg == null || idle.Busy) return;
             SetIdleBusy(true, shell.Engine.Connected ? "Writing to the cooler… do not unplug." : "Waiting for the cooler…");
-            shell.Engine.Enqueue(new Engine.DeviceJob
-            {
-                Name = "idle",
-                Progress = p => Ui(() => IdleProgress(p, p < 80 ? "Writing to the cooler, do not unplug" : "Checking the written image")),
-                Work = (lcd, prog) => { if (!DeviceStore.WriteStandby(lcd, jpg, prog)) throw new IOException("read-back did not match"); },
-                Done = err => Ui(() =>
+            idle.Store(p => Ui(() => IdleProgress(p, IdleEditor.StoreProgressText(p))),
+                (status, ok) => Ui(() =>
                 {
-                    if (err == null)
-                    {
-                        try { File.WriteAllBytes(IdleCache, jpg); } catch (IOException) { }
-                        DropIdleSource();
-                        ShowStoredIdle();
-                    }
-                    SetIdleBusy(false, err == null ? "Stored and verified on the cooler." : "Failed: " + err.Message);
-                })
-            });
+                    if (ok) { idle.Drop(); ShowStoredIdle(); }
+                    SetIdleBusy(false, status);
+                }));
         }
 
         void Ui(Action a) { w.Dispatcher.BeginInvoke(a); }
@@ -1465,53 +1255,18 @@ namespace TtLcd
         void ShowOptions(Mode m)
         {
             SetPanels();
-            F<TextBlock>("OptTitle").Text = (Engine.Label(m) + " options").ToUpperInvariant();
-            F<TextBlock>("OptDesc").Text = ModeDescription(m);
+            F<TextBlock>("OptTitle").Text = StudioModel.OptionsTitle(m);
+            F<TextBlock>("OptDesc").Text = StudioModel.ModeDescription(m);
             if (m == Mode.VirtualDisplay) UpdateVd();
             if (m == Mode.Video) UpdateThumb();
             if (m == Mode.Aura) UpdateAura();
         }
 
-        static string ModeDescription(Mode m)
-        {
-            switch (m)
-            {
-                case Mode.VirtualDisplay: return "A virtual 480×480 monitor is mirrored to the cooler. In Wallpaper Engine, choose that monitor and pick a wallpaper for it.";
-                case Mode.Monitor: return "Mirrors one of your monitors, or a part of it, to the cooler.";
-                case Mode.Image: return "Shows a still picture on the cooler.";
-                case Mode.Gif: return "Plays an animated GIF on the cooler in a loop.";
-                case Mode.Video: return "Plays a clip of up to 30 seconds in a loop. Choose the part to play, then zoom and pan to frame it.";
-                case Mode.Color: return "Fills the screen with one colour.";
-                case Mode.Clock: return "Time, date and sensor readings, arranged and styled below.";
-                case Mode.Aura: return "Adds the cooler screen to Armoury Crate as an Aura Sync device (\"TT LCD CL-W383\"). Its effects and colours drive an abstract visualiser on the LCD. Installing needs administrator rights and restarts the ASUS lighting service.";
-                case Mode.Off: return "The screen is blanked.";
-                default: return "";
-            }
-        }
-
         // Which option panels the current mode (and overlay choice) needs.
         void SetPanels()
         {
-            var cfg = shell.Engine.Config;
-            var m = cfg.Mode;
-            bool overlay = m != Mode.Clock && m != Mode.Off;
-            bool overlayOn = cfg.OverlayTime || cfg.OverlayWaterTemp || cfg.OverlayCpuTemp;
-            var map = new[] {
-                new { Panel = "OptVirtualDisplay", On = m == Mode.VirtualDisplay },
-                new { Panel = "OptMonitor", On = m == Mode.Monitor },
-                new { Panel = "OptImage", On = m == Mode.Image },
-                new { Panel = "OptGif", On = m == Mode.Gif },
-                new { Panel = "OptVideo", On = m == Mode.Video },
-                new { Panel = "OptOff", On = m == Mode.Off },
-                new { Panel = "OptAura", On = m == Mode.Aura },
-                new { Panel = "OptClock", On = m == Mode.Clock },
-                new { Panel = "OptScaling", On = m == Mode.Image || m == Mode.Gif || m == Mode.Monitor },
-                new { Panel = "OptBg", On = m == Mode.Image || m == Mode.Gif || m == Mode.Color || m == Mode.Clock },
-                new { Panel = "OptOverlay", On = overlay },
-                new { Panel = "OvDetails", On = overlayOn },
-                new { Panel = "OptText", On = SelectedVisible() },
-            };
-            foreach (var x in map) F<FrameworkElement>(x.Panel).Visibility = x.On ? Visibility.Visible : Visibility.Collapsed;
+            foreach (var x in StudioModel.Panels(shell.Engine.Config, SelectedVisible()))
+                F<FrameworkElement>(x.Key).Visibility = x.Value ? Visibility.Visible : Visibility.Collapsed;
         }
 
         void Browse(string filter, string box, Action<string> set)
@@ -1533,7 +1288,7 @@ namespace TtLcd
         void FillSwatches(WrapPanel panel, Action<int> set, Func<int> get)
         {
             var style = (Style)w.FindResource("Swatch");
-            foreach (int rgb in Palette)
+            foreach (int rgb in StudioModel.Palette)
             {
                 int v = rgb;
                 var b = new Button { Style = style, Background = new SolidColorBrush(ToColor(v)), ToolTip = "#" + v.ToString("X6") };
@@ -1629,7 +1384,7 @@ namespace TtLcd
             foreach (int r in new[] { 0, 90, 180, 270 })
             {
                 int rr = r;
-                F<RadioButton>("Rot" + r).Checked += (s, e) => Change(c => c.Rotation = (Mount(c) + rr) % 360); // shown relative to upright
+                F<RadioButton>("Rot" + r).Checked += (s, e) => Change(c => c.Rotation = StudioModel.RotationFor(c, rr)); // shown relative to upright
             }
             F<Button>("VdInstall").Click += (s, e) => RunDisplay("install");
             F<Button>("VdUninstall").Click += (s, e) => RunDisplay("uninstall");
@@ -1650,23 +1405,12 @@ namespace TtLcd
         // Runs "ttlcd.exe <args>" (which elevates itself when needed), then refreshes.
         void RunCli(string args, string statusLabel, string busyText, Action done)
         {
-            string cli = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ttlcd.exe");
             F<TextBlock>(statusLabel).Text = busyText;
-            ThreadPool.QueueUserWorkItem(_ =>
+            shell.Core.Platform.RunCli(args, output => Ui(() =>
             {
-                string output;
-                try
-                {
-                    var psi = new ProcessStartInfo(cli, args) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
-                    using (var p = Process.Start(psi)) { output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd(); p.WaitForExit(); }
-                }
-                catch (Exception e) { output = "error: " + e.Message; }
-                w.Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    done();
-                    if (output.Contains("error")) MessageBox.Show(w, output.Trim(), "TT LCD Studio");
-                }));
-            });
+                done();
+                if (output.Contains("error")) MessageBox.Show(w, output.Trim(), "TT LCD Studio");
+            }));
         }
 
         void UpdateVd()
@@ -1694,18 +1438,10 @@ namespace TtLcd
 
         void RunDisplay(string action)
         {
-            string cli = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ttlcd.exe");
             F<TextBlock>("VdStatus2").Text = action == "install" ? "Installing… (confirm the UAC prompt)" : "Removing…";
             F<Button>("VdInstall").IsEnabled = F<Button>("VdUninstall").IsEnabled = false;
-            ThreadPool.QueueUserWorkItem(_ =>
+            shell.Core.Platform.RunCli("display " + action, output =>
             {
-                string output;
-                try
-                {
-                    var psi = new ProcessStartInfo(cli, "display " + action) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
-                    using (var p = Process.Start(psi)) { output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd(); p.WaitForExit(); }
-                }
-                catch (Exception e) { output = e.Message; }
                 Thread.Sleep(1500); // display topology settles
                 w.Dispatcher.BeginInvoke(new Action(() =>
                 {
@@ -1723,8 +1459,8 @@ namespace TtLcd
             var q = F<Slider>("Quality");
             q.ValueChanged += (s, e) => { int v = (int)q.Value; F<TextBlock>("QualityT").Text = v.ToString(); Change(c => c.Quality = v); };
             var st = F<CheckBox>("StartupSwitch");
-            st.Checked += (s, e) => { if (!loading) Config.StartWithWindows = true; };
-            st.Unchecked += (s, e) => { if (!loading) Config.StartWithWindows = false; };
+            st.Checked += (s, e) => { if (!loading) shell.Core.Platform.Autostart = true; };
+            st.Unchecked += (s, e) => { if (!loading) shell.Core.Platform.Autostart = false; };
             var bl = F<CheckBox>("BlankSwitch");
             bl.Checked += (s, e) => Change(c => c.BlankOnExit = true);
             bl.Unchecked += (s, e) => Change(c => c.BlankOnExit = false);
@@ -1763,7 +1499,7 @@ namespace TtLcd
             F<Button>("SvcInstall").Click += (s, e) => RunCli("service install", "SvcStatus", "Installing… (confirm the UAC prompt)", UpdateService);
             F<Button>("SvcUninstall").Click += (s, e) => RunCli("service uninstall", "SvcStatus", "Removing… (confirm the UAC prompt)", UpdateService);
             F<Button>("ClearCache").Click += (s, e) => { Video.ClearCache(); UpdateCacheInfo(); };
-            F<Button>("OpenConfig").Click += (s, e) => Process.Start("explorer.exe", Config.Folder);
+            F<Button>("OpenConfig").Click += (s, e) => shell.Core.Platform.OpenFolder(Config.Folder);
         }
 
         void UpdateGamePanel()
@@ -1775,31 +1511,17 @@ namespace TtLcd
             foreach (var n in new[] { "GmFpsLabel", "GmFps", "GmFpsT" }) F<FrameworkElement>(n).Visibility = fpsVis;
         }
 
-        // Live game-mode status line (Settings) and title-bar note.
-        string GameStatus()
-        {
-            var e = shell.Engine; var c = e.Config;
-            string g = e.Game;
-            if (g == null)
-                return !c.GameDetect ? "Game detection is off." :
-                    "No game running." + (c.GameKnownList ? string.Format(" Windows knows {0} games on this PC.", GameDetect.KnownGameCount) : "");
-            string act = c.GameAction == GameAction.LowerFps ? "streaming at " + c.GameFps + " fps"
-                       : c.GameAction == GameAction.IdleScreen ? "streaming stopped, the cooler shows its idle screen" : "no change";
-            string who = g == Engine.ManualGame ? "Game mode on (forced)" : "Game running: " + g;
-            return who + " · " + act + ", sensors every " + c.GameSensorMs / 1000 + " s.";
-        }
-
         void UpdateService()
         {
-            bool inst = SensorService.Installed, run = inst && SensorService.Running;
-            F<TextBlock>("SvcStatus").Text = !inst ? "○ Service not installed" : run ? "● Service running" : "● Installed · not running";
+            bool inst = shell.Core.Platform.SensorInstalled;
+            F<TextBlock>("SvcStatus").Text = shell.Core.Platform.SensorStatus;
             F<Button>("SvcInstall").IsEnabled = !inst;
             F<Button>("SvcUninstall").IsEnabled = inst;
         }
 
         void UpdateCacheInfo()
         {
-            F<TextBlock>("CacheInfo").Text = string.Format("Video cache: {0:F1} MB · Settings: {1}", Video.CacheBytes() / 1048576.0, Config.Folder);
+            F<TextBlock>("CacheInfo").Text = StudioModel.CacheInfo();
         }
 
         // ---------------- load config into controls ----------------
@@ -1827,10 +1549,10 @@ namespace TtLcd
             foreach (var l in loaders) l(c);
             F<Slider>("Bright").Value = c.Brightness;
             F<TextBlock>("BrightT").Text = c.Brightness + "%";
-            F<RadioButton>("Rot" + UserRotation(c)).IsChecked = true;
+            F<RadioButton>("Rot" + StudioModel.UserRotation(c)).IsChecked = true;
             F<Slider>("Fps").Value = c.Fps; F<TextBlock>("FpsT").Text = c.Fps.ToString();
             F<Slider>("Quality").Value = c.Quality; F<TextBlock>("QualityT").Text = c.Quality.ToString();
-            F<CheckBox>("StartupSwitch").IsChecked = Config.StartWithWindows;
+            F<CheckBox>("StartupSwitch").IsChecked = shell.Core.Platform.Autostart;
             F<CheckBox>("BlankSwitch").IsChecked = c.BlankOnExit;
             F<CheckBox>("TrayCloseSwitch").IsChecked = c.CloseToTray;
             F<CheckBox>("DbShowWater").IsChecked = c.DashWater;
@@ -1853,41 +1575,22 @@ namespace TtLcd
             shownSeq = f.Seq;
             var img = F<Image>("Preview");
             img.Source = ToImage(f.Jpeg);
-            img.RenderTransform = new RotateTransform(-Mount()); // the LCD as you see it on this mount
+            img.RenderTransform = new RotateTransform(-StudioModel.Mount(shell.Engine.Config)); // the LCD as you see it on this mount
         }
-
-        int Mount() { return Mount(shell.Engine.Config); }
-        static int Mount(Config c) { return c.PreviewMount < 0 ? c.Rotation : c.PreviewMount; }
-        // Rotation as the user sees it: 0° = upright on this mount (the stored Rotation is the software turn that
-        // achieves it, e.g. 270° here).
-        static int UserRotation(Config c) { return ((c.Rotation - Mount(c)) % 360 + 360) % 360; }
 
         // Rotate arrow on the preview: the one Rotation setting, +90° clockwise per click (saved). The engine also
         // sets the cooler's own rotation to match, so its idle screen turns with the live picture.
         void RotateClick()
         {
-            int r = (UserRotation(shell.Engine.Config) + 90) % 360;
+            int r = StudioModel.NextUserRotation(shell.Engine.Config);
             F<RadioButton>("Rot" + r).IsChecked = true; // saves it (Device page handler) and keeps that page in sync
         }
 
-        // First connect: the cooler's current rotation is taken as the one that matches today's live rotation
-        // (calibration for Engine.HwFor). Also keeps the idle preview turned like the LCD.
-        int hwRotShown = -2;
+        // Cooler rotation calibration on first connect (StudioModel); keeps the idle preview turned like the LCD.
         void UpdateHwRotation()
         {
-            int hw = shell.Engine.HwRotation;
-            if (hw >= 0 && shell.Engine.Config.HwUpright < 0) Change(c => c.HwUpright = hw);
-            int key = hw * 1000 + shell.Engine.Config.Rotation;
-            if (key == hwRotShown) return;
-            hwRotShown = key;
-            if (idleSrc == null) F<Image>("IdlePreview").RenderTransform = new RotateTransform(IdlePreviewAngle());
-        }
-
-        // The idle picture is shown by the cooler in the same orientation as live frames (its rotation follows
-        // ours), i.e. turned by Rotation - mount from upright.
-        double IdlePreviewAngle()
-        {
-            return ((shell.Engine.Config.Rotation - Mount()) % 360 + 360) % 360;
+            if (model.CheckHwRotation() && !idle.Editing)
+                F<Image>("IdlePreview").RenderTransform = new RotateTransform(StudioModel.IdlePreviewAngle(shell.Engine.Config));
         }
 
         void UpdateStatus() { UpdateStatus(false); }
@@ -1902,19 +1605,18 @@ namespace TtLcd
             dot.Fill = new SolidColorBrush(dotColor);
             var glow = dot.Effect as System.Windows.Media.Effects.DropShadowEffect;
             if (glow != null && !glow.IsFrozen) glow.Color = dotColor;
-            F<TextBlock>("ConnText").Text = e.Connected ? "Cooler connected" : "Cooler not connected";
-            F<TextBlock>("FpsBig").Text = e.Connected ? string.Format("{0:F0} FPS", e.Fps) : "";
-            F<TextBlock>("ModeText").Text = e.Connected ? e.RenderStatus : e.DeviceStatus;
-            F<TextBlock>("TitleStatus").Text = (e.Connected ? "● " : "○ ") + Engine.Label(e.Config.Mode) + (e.Suspended ? " · cooler showing its idle screen" : e.Paused ? " · paused" : "")
-                + (e.Game == Engine.ManualGame ? " · game mode" : e.Game != null ? " · game: " + e.Game : "");
-            F<TextBlock>("GmStatus").Text = GameStatus();
+            F<TextBlock>("ConnText").Text = model.ConnText;
+            F<TextBlock>("FpsBig").Text = model.FpsText;
+            F<TextBlock>("ModeText").Text = model.ModeText;
+            F<TextBlock>("TitleStatus").Text = model.TitleStatus;
+            F<TextBlock>("GmStatus").Text = model.GameStatus();
             F<ToggleButton>("GameBtn").IsChecked = e.ForceGame;
             F<CheckBox>("GmForce").IsChecked = e.ForceGame;
             UpdatePauseOverlay();
-            F<TextBlock>("DevStatus").Text = e.Connected ? "Connected" : e.DeviceStatus;
-            F<TextBlock>("DevSerial").Text = string.IsNullOrEmpty(e.Serial) ? "—" : e.Serial;
-            F<TextBlock>("NavSerial").Text = string.IsNullOrEmpty(e.Serial) ? "" : "S/N " + e.Serial;
-            F<TextBlock>("DevFps").Text = string.Format("{0:F1} fps", e.Fps);
+            F<TextBlock>("DevStatus").Text = model.DeviceStatus;
+            F<TextBlock>("DevSerial").Text = model.SerialText;
+            F<TextBlock>("NavSerial").Text = model.NavSerial;
+            F<TextBlock>("DevFps").Text = model.DevFps;
             if (e.Config.Mode == Mode.Aura) UpdateAura();
             var pb = F<ProgressBar>("VProgress");
             double p = e.VideoProgress;
