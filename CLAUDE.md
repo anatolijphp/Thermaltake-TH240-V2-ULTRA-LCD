@@ -7,7 +7,7 @@ Owner rules:
 - **Install nothing.** Use only built-in Windows tools (C# 5 / .NET 4.8 `csc`) and files inside this folder.
 - A driver is allowed only if this tool installs and uninstalls it.
 - Do the work yourself, with no "split the work".
-- Linux support is wanted later (not started).
+- Linux: started 2026-10-10 (Ubuntu build: CLI + screen service, see "Linux" below).
 
 Full conversation transcript (very long):
 `C:\Users\anato\.claude\projects\C--Users-anato\87ff2591-a9e9-489b-9bea-a8a27fdb3ba3.jsonl`
@@ -50,8 +50,8 @@ code until they restart. It also builds:
 - `build\windows\TTLcdStudio-Setup.exe` from `installer/Setup.cs`, with `build\windows\app` embedded as
   `payload/<path>` resources
 
-The version is in `src/Version.cs`. `.github/workflows/build.yml` builds, checks the firmware checksums, smoke-tests a
-silent install and uninstall, and uploads the installer and a portable zip.
+The version is in `src/Version.cs`. `.github/workflows/build.yml` builds Windows and Linux, checks the firmware
+checksums, smoke-tests a silent install and uninstall, tests the .deb in a container, and a `v*` tag releases both.
 
 ## Layout
 
@@ -140,6 +140,19 @@ stopping the `ttlcd hwmon` helper, so the helper wasn't the cause. `ttlcd temp` 
 
 Water temperature is then polled at `GameSensorMs`. The CPU-temp helper reads its interval from offset 24 of the
 `TTLcdSensors` map (Studio writes it). A helper started before this change keeps 1.5 s until restarted.
+
+## Linux
+
+- `build.sh` (Mono `mcs`, file list taken from `build.cmd` CORE) builds `build/linux/`: `ttlcd_<ver>_all.deb`, a tarball,
+  and `pkg/` (installed layout). Packaging files are in `linux/` (launcher, udev rule, systemd user unit, control, postinst).
+- `src/LinuxHid.cs`: `Os.Linux`, `Os.Supports(mode)` (Image, Gif, Color, Clock, Off), hidraw enumeration through
+  `/sys/class/hidraw/*/device/uevent` (HID_ID, HID_PHYS ".../inputN" = interface). hidraw reads return the report
+  without the report-ID byte; `Lcd.ReadCtrl` shifts it. Mono named mutexes are per process only.
+- Engine on Linux: `/proc/stat` CPU load, `/proc/meminfo` RAM, hwmon (k10temp/zenpower/coretemp) CPU temperature;
+  no timeBeginPeriod, game detection or sensor map.
+- CLI: `run` (headless service, reloads config.xml on change), `config`, `set <field> <value>`, `render <jpg> [mode]`.
+- CI `linux` job installs the .deb in a clean `ubuntu:24.04` container and renders frames. Not yet tested on real
+  hardware under Linux.
 
 ## GitHub
 

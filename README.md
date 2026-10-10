@@ -9,7 +9,7 @@ USB protocol.
 
 [![build](https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD/actions/workflows/build.yml/badge.svg)](https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD/actions/workflows/build.yml)
 [![release](https://img.shields.io/github/v/release/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD?include_prereleases&label=release)](https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD/releases)
-![platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078d4)
+![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Ubuntu-0078d4)
 ![.NET](https://img.shields.io/badge/.NET%20Framework-4.8%20(built%20in)-512bd4)
 
 <img src="docs/media/dashboard.gif" alt="A tour of TT LCD Studio: dashboard, display modes, device and settings, with the live cooler preview" width="860">
@@ -93,9 +93,27 @@ Uninstalling keeps your settings in `%APPDATA%\ttlcd`. The shared Aura plugin an
 
 > **Close TT RGB Plus first.** Only one program can drive the LCD at a time.
 
+### Ubuntu / Linux
+
+The Linux version is the command-line tool plus a background service that drives the screen. It shows the clock and
+sensor face (coolant temperature from the cooler, CPU temperature from the kernel's sensor driver, CPU load), an
+image, an animated GIF or a colour. The Studio window, Wallpaper Engine, Aura Sync and screen mirroring are Windows-only.
+
+```
+sudo apt install ./ttlcd_1.0.0_all.deb       # from the release; pulls in Mono
+systemctl --user enable --now ttlcd       # drive the screen, also after every login
+ttlcd set Mode Clock                      # or Image / Gif / Color / Off; the service picks it up
+ttlcd set GifPath ~/Pictures/loop.gif
+ttlcd config                              # all settings (~/.config/ttlcd/config.xml)
+```
+
+The package adds a udev rule so your user can reach the cooler without root (replug it or reboot once after
+installing). Other distributions: unpack `ttlcd-<version>-linux.tar.gz` to `/` and install Mono and libgdiplus.
+
 ## Build from source
 
-All you need is Windows: `build.cmd` uses the .NET Framework 4.8 C# compiler that ships with it. No SDK, no NuGet.
+**Windows:** `build.cmd` uses the .NET Framework 4.8 C# compiler that ships with it. No SDK,
+no NuGet. **Linux:** `./build.sh` with Mono (`sudo apt install mono-devel`); it compiles the same sources.
 
 ```
 git clone https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD.git
@@ -113,8 +131,15 @@ Sources and build output are kept apart. Everything built lands in `build\<os>\`
 | `app\driver\`, `app\firmware\` | Virtual display driver; LCD firmware and rescue tools |
 | `TTLcdStudio-Setup.exe` | The installer |
 
-Every push runs [GitHub Actions](.github/workflows/build.yml): build, firmware checksum check, a silent install and
-uninstall smoke test, then the installer and portable zip as artifacts. Tags `v*` publish a release.
+| `build/linux/` | What |
+|---|---|
+| `ttlcd_<version>_all.deb` | Debian/Ubuntu package: `/usr/bin/ttlcd`, udev rule, systemd user service |
+| `ttlcd-<version>-linux.tar.gz` | The same files for other distributions |
+| `pkg/` | The installed layout |
+
+Every push runs [GitHub Actions](.github/workflows/build.yml) on Windows and Ubuntu: build, firmware checksum check, a
+silent install and uninstall smoke test, and an install of the `.deb` into a clean Ubuntu container that renders
+frames. Tags `v*` publish a release with the files for both.
 
 ## Command line
 
@@ -126,6 +151,9 @@ ttlcd stream [-m N]         mirror a monitor
 ttlcd service install       CPU temperature service (admin, one time)
 ttlcd display install       virtual 480×480 monitor for Wallpaper Engine (admin)
 ttlcd aura install          Armoury Crate / Aura Sync plugin (admin)
+ttlcd run                   drive the screen from the settings (the Linux service runs this)
+ttlcd set <name> <value>    change a setting, e.g. ttlcd set Mode Clock
+ttlcd render <out.jpg>      render one frame of the current mode, no cooler needed
 ```
 
 Run `ttlcd` without arguments for the full list.
