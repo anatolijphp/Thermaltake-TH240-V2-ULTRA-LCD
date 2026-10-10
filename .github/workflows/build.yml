@@ -1,0 +1,62 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same compiler as on a plain Windows install: .NET Framework 4.8 csc (C# 5). No SDK, no packages.
+      # Builds the app, the Aura plugin and the rescue tools into build\windows\app, and build\windows\TTLcdStudio-Setup.exe.
+      - name: Build
+        shell: cmd
+        run: build.cmd
+
+      - name: Check firmware checksums
+        shell: pwsh
+        run: |
+          Get-Content firmware/SHA256SUMS.txt | ForEach-Object {
+            $hash, $name = $_ -split '\s+', 2
+            $actual = (Get-FileHash "firmware/$name" -Algorithm SHA256).Hash.ToLower()
+            if ($actual -ne $hash) { throw "checksum mismatch: $name" }
+          }
+
+      - name: Installer smoke test (silent install + uninstall)
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'TT LCD Studio'
+          Start-Process build/windows/TTLcdStudio-Setup.exe -ArgumentList "/S `"/D=$dir`"" -Wait
+          foreach ($f in 'ttlcd.exe','TTLcdStudio.exe','TTLcdAura.dll','Uninstall.exe','driver/MttVDD.inf','firmware/ttrescue.exe','firmware/lx800_tt021panel.bin') {
+            if (-not (Test-Path (Join-Path $dir $f))) { throw "missing after install: $f" }
+          }
+          Start-Process (Join-Path $dir 'Uninstall.exe') -ArgumentList '/uninstall /S' -Wait
+          Start-Sleep 8
+          if (Test-Path $dir) { throw "install folder still there after uninstall" }
+
+      # build\windows\app is already laid out like an install, so the portable zip is just that folder
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive build/windows/app/* build/windows/TTLcdStudio-portable.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TTLcdStudio-windows
+          path: |
+            build/windows/TTLcdStudio-Setup.exe
+            build/windows/TTLcdStudio-portable.zip
+
+      - name: Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" build/windows/TTLcdStudio-Setup.exe build/windows/TTLcdStudio-portable.zip --title "${{ github.ref_name }}" --generate-notes

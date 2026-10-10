@@ -1,0 +1,20 @@
+# build output (build.cmd / CI produce these from source): build\<os>\
+/build/
+*.exe
+*.pdb
+*.old
+*.dll
+!/driver/*.dll
+
+# third-party tools (portable Ghidra, JDK, Nuvoton TurboWriter, downloads)
+/tools/
+
+# reverse-engineering workspace: Ghidra projects, outputs and vendor binaries stay local
+/re/*
+!/re/scripts/
+!/re/*.cmd
+
+# flash dumps and logs (the firmware we ship is in firmware/, see the exception below)
+*.bin
+*.log
+!/firmware/*.bin
