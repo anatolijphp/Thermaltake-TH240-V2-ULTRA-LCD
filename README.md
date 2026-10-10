@@ -12,7 +12,7 @@ USB protocol.
 ![platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078d4)
 ![.NET](https://img.shields.io/badge/.NET%20Framework-4.8%20(built%20in)-512bd4)
 
-<img src="docs/media/dashboard.gif" alt="TT LCD Studio dashboard with live gauges and the cooler preview" width="860">
+<img src="docs/media/dashboard.gif" alt="A tour of TT LCD Studio: dashboard, display modes, device and settings, with the live cooler preview" width="860">
 
 </div>
 
@@ -33,16 +33,38 @@ USB protocol.
 
 ### Pick a mode, see it live
 
-The preview on the right is exactly what the cooler shows, rotated the way the pump is mounted.
+One click switches what the cooler shows: your **Wallpaper Engine** wallpaper (on a virtual 480×480 monitor),
+**Aura Sync** effects from Armoury Crate, a looping **GIF**, and more. The preview on the right is exactly what the
+cooler shows, rotated the way the pump is mounted.
 
-<img src="docs/media/modes.gif" alt="Switching between the Clock, Colour and Aura Sync modes" width="860">
+<img src="docs/media/modes.gif" alt="Switching between the Wallpaper Engine, Aura Sync and GIF modes" width="860">
 
 ### Style every reading
 
-Arrange readings into lines by drag and drop. Each reading has its own font, size, effect, colour, label (beside or
-above), units and colour-by-value. Everything is kept inside the round screen automatically.
+Any mode can carry an overlay of time and temperatures, and the Clock mode is made of them. Arrange readings into lines
+by drag and drop, then style each one on its own: font, size, effect (shadow, outline, neon glow), colour, label beside
+or above, °C/°F and colour-by-value. Everything is kept inside the round screen automatically.
 
-<img src="docs/media/clock.gif" alt="Selecting the Time reading and changing its size" width="860">
+<img src="docs/media/style.gif" alt="Aura Sync mode: switching on the time overlay, making it bigger and giving it a neon glow" width="860">
+
+### Game mode
+
+Streaming 30 frames a second to the cooler costs a little CPU and USB time. Game mode gives that back while you play:
+
+- **Detects games by itself**, using only what Windows already knows:
+  - full-screen Direct3D games
+  - games in the Xbox Game Bar list, matched against running processes
+  - optionally, any window that covers its whole monitor (borderless games)
+  - your own lists of apps to include or ignore
+- **While a game runs**, pick one:
+  - **Lower frame rate**: keep the screen alive at a frame rate you choose (default 5 fps)
+  - **Show idle screen**: stop streaming completely, so the cooler shows its own idle picture
+  - **Keep going**: change nothing
+- **Slower sensor polling** while gaming (default every 10 s) for the water and CPU temperature.
+- **Force it on** any time with the gamepad button in the title bar or the switch in Settings, for example for a game
+  that isn't detected. The title bar shows when game mode is on.
+
+<img src="docs/media/game.gif" alt="Settings: turning on game detection and forcing game mode on, the frame rate drops to 5 fps" width="860">
 
 ## Install
 
@@ -129,9 +151,10 @@ rotation), encodes it and streams it at up to 30 fps. The protocol is documented
 <details>
 <summary>Recording the README GIFs</summary>
 
-`TTLcdStudio.exe --record docs\media\<scene>.gif <modes|dashboard|clock>` plays a scripted scene in an off-screen
-window and saves it as a GIF ([`src/Record.cs`](src/Record.cs)). Close the running Studio first; the scenes change the
-mode like a user would, so restore `%APPDATA%\ttlcd\config.xml` afterwards.
+`TTLcdStudio.exe --record docs\media\<scene>.gif <dashboard|modes|style|game>` plays a scripted scene in an
+off-screen window and saves it as a GIF ([`src/Record.cs`](src/Record.cs)). Close the running Studio first; the scenes
+change settings like a user would, so restore `%APPDATA%\ttlcd\config.xml` afterwards. For the GIF mode, set
+`TTLCD_REC_GIF` to an animated GIF to play.
 </details>
 
 ## ⚠️ Warnings

@@ -121,7 +121,7 @@ stopping the `ttlcd hwmon` helper, so the helper wasn't the cause. `ttlcd temp` 
   layout and breaks fields.
 - `TTLCD_SHOT_SELECT=ClkItems:2` pre-selects a reading for `--screenshot`.
 - `TTLcdStudio.exe --screenshot <png> modes:Clock` renders that mode's options without saving it.
-- `TTLcdStudio.exe --record <gif> <modes|dashboard|clock>` records the README GIFs (`src/Record.cs`, `src/Gif.cs`) in an
+- `TTLcdStudio.exe --record <gif> <dashboard|modes|style|game>` records the README GIFs (`src/Record.cs`, `src/Gif.cs`) in an
   off-screen window. Close Studio first and restore `config.xml` afterwards (the scenes change the mode).
   `TTLCD_SHOT_HEIGHT` renders a taller window.
 

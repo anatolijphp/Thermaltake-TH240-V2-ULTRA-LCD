@@ -1,7 +1,7 @@
 // Dev aid: TTLcdStudio --record <out.gif> <scene> plays a scripted scene in the real window and saves it as an animated
 // GIF for the README (docs/media). The window is shown off-screen so layout, storyboards and the live preview run as on a
 // desktop, but nothing touches the user's screen or mouse; frames come from RenderTargetBitmap and the cursor is drawn in.
-// Scenes: modes, dashboard, clock. They change the mode and styles like a user would; restore config.xml afterwards.
+// Scenes: dashboard (navigation tour), modes, style. They change the mode and styles like a user would; restore config.xml afterwards.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -41,48 +41,83 @@ namespace TtLcd
             switch (scene)
             {
                 case "modes":
-                    setup = () => { F<RadioButton>("NavModes").IsChecked = true; F<RadioButton>("ModeAura").IsChecked = true; F<ScrollViewer>("PageScroll").ScrollToTop(); };
+                    Action gifSample = () =>
+                    {
+                        // GIF mode needs a file; TTLCD_REC_GIF points at a sample for the recording
+                        var g = Environment.GetEnvironmentVariable("TTLCD_REC_GIF");
+                        if (!string.IsNullOrEmpty(g)) { Change(c => c.GifPath = g); F<TextBox>("GifPath").Text = g; }
+                    };
+                    setup = () => { gifSample(); F<RadioButton>("NavModes").IsChecked = true; F<RadioButton>("ModeClock").IsChecked = true; F<ScrollViewer>("PageScroll").ScrollToTop(); };
                     cursor = new Point(560, 760);
-                    add(new Step { At = 500, Dur = 600, To = el("ModeClock") });
-                    add(new Step { At = 1250, Click = true, Do = () => F<RadioButton>("ModeClock").IsChecked = true });
-                    add(new Step { At = 3500, Dur = 500, To = el("ModeColor") });
-                    add(new Step { At = 4100, Click = true, Do = () => F<RadioButton>("ModeColor").IsChecked = true });
-                    add(new Step { At = 5700, Dur = 500, To = el("ModeAura") });
-                    add(new Step { At = 6300, Click = true, Do = () => F<RadioButton>("ModeAura").IsChecked = true });
-                    length = 8800;
+                    add(new Step { At = 500, Dur = 600, To = el("ModeVirtualDisplay") });
+                    add(new Step { At = 1250, Click = true, Do = () => F<RadioButton>("ModeVirtualDisplay").IsChecked = true });
+                    add(new Step { At = 3500, Dur = 600, To = el("ModeAura") });
+                    add(new Step { At = 4200, Click = true, Do = () => F<RadioButton>("ModeAura").IsChecked = true });
+                    add(new Step { At = 6400, Dur = 600, To = el("ModeGif") });
+                    add(new Step { At = 7100, Click = true, Do = () => F<RadioButton>("ModeGif").IsChecked = true });
+                    length = 9600;
                     break;
 
                 case "dashboard":
+                    // a tour through the main navigation
                     setup = () => { F<RadioButton>("ModeAura").IsChecked = true; F<RadioButton>("NavDashboard").IsChecked = true; F<ScrollViewer>("PageScroll").ScrollToTop(); };
                     cursor = new Point(1000, 690);
-                    Action toggleNav = () => F<Button>("NavToggle").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-                    add(new Step { At = 3000, Dur = 700, To = el("NavToggle") });
-                    add(new Step { At = 3900, Click = true, Do = toggleNav });
-                    add(new Step { At = 5600, Click = true, Do = toggleNav });
-                    add(new Step { At = 6400, Dur = 700, To = () => new Point(1000, 690) });
-                    length = 8200;
+                    int at = 2200;
+                    foreach (var nav in new[] { "NavModes", "NavDevice", "NavSettings", "NavDashboard" })
+                    {
+                        string n = nav;
+                        add(new Step { At = at, Dur = 600, To = el(n) });
+                        add(new Step { At = at + 750, Click = true, Do = () => { F<ScrollViewer>("PageScroll").ScrollToTop(); F<RadioButton>(n).IsChecked = true; } });
+                        at += 2400;
+                    }
+                    add(new Step { At = at - 1200, Dur = 700, To = () => new Point(1000, 690) });
+                    length = at;
                     break;
 
-                case "clock":
+                case "style":
+                    // Aura Sync with the overlay: switch the time on, select it, make it bigger and give it a neon glow
+                    Func<ItemList> ov = () => itemLists.First(x => x.Panel == "OvItems");
                     setup = () =>
                     {
-                        F<RadioButton>("NavModes").IsChecked = true; F<RadioButton>("ModeClock").IsChecked = true;
-                        w.Dispatcher.BeginInvoke(new Action(() => ScrollToCentre(F<FrameworkElement>("ClkItems"), () => { })), DispatcherPriority.Loaded);
+                        F<RadioButton>("NavModes").IsChecked = true; F<RadioButton>("ModeAura").IsChecked = true;
+                        w.Dispatcher.BeginInvoke(new Action(() => ScrollToCentre(F<FrameworkElement>("OvItems"), () => { })), DispatcherPriority.Loaded);
                     };
                     cursor = new Point(700, 300);
-                    add(new Step { At = 400, Dur = 700, To = () => CentreOf(Chip("ClkItems", "Time"), root) });
-                    add(new Step { At = 1300, Click = true, Do = () =>
+                    add(new Step { At = 400, Dur = 700, To = () => { var p = CentreOf(Chip("OvItems", "Time"), root); var c = Chip("OvItems", "Time"); return new Point(p.X - c.ActualWidth / 2 - 13, p.Y); } });
+                    add(new Step { At = 1300, Click = true, Do = () => { Change(c => c.OverlayTime = true); SetPanels(); BuildItems(ov()); } });
+                    add(new Step { At = 2300, Dur = 500, To = () => CentreOf(Chip("OvItems", "Time"), root) });
+                    add(new Step { At = 3000, Click = true, Do = () =>
                     {
-                        selList = itemLists.First(x => x.Panel == "ClkItems"); selId = 0;
-                        RebuildItems(); ShowStyleEditor();
+                        selList = ov(); selId = 0;
+                        BuildItems(ov()); ShowStyleEditor();
                         w.Dispatcher.BeginInvoke(new Action(() => ScrollToCentre(F<FrameworkElement>("OptText"), () => { })), DispatcherPriority.Loaded);
                     } });
                     double v0 = 0, v1 = 0;
-                    add(new Step { At = 2600, Dur = 600, To = () => ThumbOf(F<Slider>("StSize"), root) });
-                    add(new Step { At = 3300, Do = () => { v0 = F<Slider>("StSize").Value; v1 = Math.Max(F<Slider>("StSize").Minimum, Math.Round(v0 * 0.55)); } });
-                    add(new Step { At = 3400, Dur = 1300, Tween = k => { var s = F<Slider>("StSize"); s.Value = Math.Round(v0 + (v1 - v0) * Ease(k)); } });
-                    add(new Step { At = 5600, Dur = 1100, Tween = k => { var s = F<Slider>("StSize"); s.Value = Math.Round(v1 + (v0 - v1) * Ease(k)); } });
-                    length = 7600;
+                    add(new Step { At = 4300, Dur = 600, To = () => ThumbOf(F<Slider>("StSize"), root) });
+                    add(new Step { At = 5000, Do = () => { v0 = F<Slider>("StSize").Value; v1 = Math.Min(F<Slider>("StSize").Maximum, Math.Round(v0 * 2.2)); } });
+                    add(new Step { At = 5100, Dur = 1300, Tween = k => { F<Slider>("StSize").Value = Math.Round(v0 + (v1 - v0) * Ease(k)); } });
+                    add(new Step { At = 7000, Dur = 600, To = el("FxGlow") });
+                    add(new Step { At = 7700, Click = true, Do = () => F<RadioButton>("FxGlow").IsChecked = true });
+                    length = 10200;
+                    break;
+                case "game":
+                    // Settings → Game mode: turn detection on, pick "lower frame rate", force game mode on and back off
+                    setup = () =>
+                    {
+                        F<RadioButton>("ModeAura").IsChecked = true; F<RadioButton>("NavSettings").IsChecked = true;
+                        w.Dispatcher.BeginInvoke(new Action(() => ScrollToCentre(F<FrameworkElement>("GmOptions"), () => { })), DispatcherPriority.Loaded);
+                    };
+                    cursor = new Point(700, 640);
+                    add(new Step { At = 400, Dur = 600, To = el("GmOn") });
+                    add(new Step { At = 1100, Click = true, Do = () => F<CheckBox>("GmOn").IsChecked = true });
+                    add(new Step { At = 2200, Dur = 600, To = el("GmActLowerFps") });
+                    add(new Step { At = 2900, Click = true, Do = () => F<RadioButton>("GmActLowerFps").IsChecked = true });
+                    add(new Step { At = 3900, Dur = 600, To = el("GmForce") });
+                    add(new Step { At = 4600, Click = true, Do = () => F<CheckBox>("GmForce").IsChecked = true });
+                    add(new Step { At = 5400, Dur = 900, To = el("GmStatus") });
+                    add(new Step { At = 8600, Dur = 700, To = el("GmForce") });
+                    add(new Step { At = 9400, Click = true, Do = () => F<CheckBox>("GmForce").IsChecked = false });
+                    length = 11400;
                     break;
 
                 default: throw new ArgumentException("unknown scene: " + scene);
