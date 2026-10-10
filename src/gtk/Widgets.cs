@@ -177,7 +177,7 @@ namespace TtLcd.GtkUi
     {
         readonly string icon; readonly Label label;
         bool on, hover;
-        public event Action Clicked;
+        public event System.Action Clicked;
         public bool Collapsed;
 
         public NavItem(string text, string icon)
@@ -230,7 +230,7 @@ namespace TtLcd.GtkUi
     class IconButton : EventBox
     {
         public string Icon; public bool Round, Checked; bool hover;
-        public event Action Clicked;
+        public event System.Action Clicked;
         public double IconSize = 14;
 
         public IconButton(string icon, int w, int h, string tip)
