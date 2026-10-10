@@ -354,15 +354,25 @@ namespace TtLcd.GtkUi
                 ShowStyleEditor();
             }
             ShowPage(page);
-            while (Application.EventsPending()) Application.RunIteration();
+            Pump(800);   // GTK lays out on the next frame; let it (and the engine's next frames) catch up
             UpdatePreview(); UpdateStatus(); UpdateDashboard();
-            while (Application.EventsPending()) Application.RunIteration();
+            Pump(300);
             // what the X server shows for the window (Xvfb in CI), as a user would see it
             var a = Allocation;
             Window.ProcessUpdates(true);
             IntPtr p = gdk_pixbuf_get_from_window(Window.Handle, 0, 0, a.Width, a.Height);
             if (p == IntPtr.Zero) throw new InvalidOperationException("could not read the window's pixels");
             using (var pix = new Gdk.Pixbuf(p)) pix.Save(file, "png");
+        }
+
+        static void Pump(int ms)
+        {
+            var end = DateTime.UtcNow.AddMilliseconds(ms);
+            while (DateTime.UtcNow < end)
+            {
+                while (Application.EventsPending()) Application.RunIteration();
+                System.Threading.Thread.Sleep(10);
+            }
         }
 
         [System.Runtime.InteropServices.DllImport("libgdk-3.so.0")]

@@ -57,7 +57,7 @@ namespace TtLcd.GtkUi
         LineEditor selEditor;                 // the editor whose reading is selected (style panel), or null
         Label stTitle; Box stUnits, stReading; SegToggle stFx, stUnitSeg, stLabelSeg; Slider stSize; Label stSizeT;
         ComboBoxText stFont; ToggleButton stBold, stItalic; SwitchToggle stByTemp; Swatches stColour;
-        bool styleLoading;
+        bool styleLoading, missingFont;
 
         static readonly Mode[] LinuxModes = { Mode.Off, Mode.Image, Mode.Gif, Mode.Color, Mode.Clock };
         static readonly Dictionary<Mode, string> TileIcon = new Dictionary<Mode, string>
@@ -184,7 +184,7 @@ namespace TtLcd.GtkUi
 
             stFont = new ComboBoxText { Hexpand = true };
             foreach (var fam in System.Drawing.FontFamily.Families) stFont.AppendText(fam.Name);
-            stFont.Changed += (o, a) => { string n = stFont.ActiveText; if (n != null) EditStyle(st => st.Font = n); };
+            stFont.Changed += (o, a) => { string n = stFont.ActiveText; if (n != null && !n.EndsWith(" (not installed)")) EditStyle(st => st.Font = n); };
             stBold = StyleChip("Bold", v => EditStyle(st => st.Bold = v));
             stItalic = StyleChip("Italic", v => EditStyle(st => st.Italic = v));
             var fontRow = new Box(Orientation.Horizontal, 8);
@@ -239,7 +239,10 @@ namespace TtLcd.GtkUi
                 styleLoading = true;
                 stTitle.Text = "TEXT STYLE · " + def.Name.ToUpperInvariant() + (selEditor.List.Overlay ? " (OVERLAY)" : "");
                 var names = System.Drawing.FontFamily.Families.Select(f => f.Name).ToList();
-                stFont.Active = names.IndexOf(st.Font);
+                if (missingFont) { stFont.Remove(0); missingFont = false; }   // the previous "not installed" entry
+                int fi = names.IndexOf(st.Font);
+                if (fi < 0 && !string.IsNullOrEmpty(st.Font)) { stFont.PrependText(st.Font + " (not installed)"); fi = 0; missingFont = true; }
+                stFont.Active = fi;
                 stBold.Active = st.Bold; stItalic.Active = st.Italic;
                 stSize.Set(st.Size, false); stSizeT.Text = st.Size + " px";
                 stFx.Select((int)st.Effect, false);

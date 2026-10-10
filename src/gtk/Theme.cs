@@ -58,6 +58,7 @@ button.btn:hover { border-color: #46464B; }
 button.btn:disabled { color: #55555A; }
 button.accent label, button.btn label { color: inherit; }
 entry { background-color: #0D0D0E; color: #EDEDED; border: 1px solid #29292C; border-radius: 2px; box-shadow: none; padding: 4px 8px; }
+combobox button { padding: 3px 8px; min-height: 0; }
 combobox button, combobox box { background-image: none; background-color: #0D0D0E; color: #EDEDED; border-color: #29292C; box-shadow: none; text-shadow: none; }
 combobox * { color: #EDEDED; }
 menu, .menu, menuitem { background-color: #131314; color: #EDEDED; }
