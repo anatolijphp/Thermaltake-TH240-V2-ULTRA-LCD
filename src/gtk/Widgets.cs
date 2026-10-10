@@ -24,7 +24,7 @@ namespace TtLcd.GtkUi
 
         protected override bool OnDrawn(Context cr)
         {
-            Theme.Card(cr, Allocation.Width, Allocation.Height);
+            Theme.PaintCard(cr, Allocation.Width, Allocation.Height);
             return base.OnDrawn(cr);
         }
     }
@@ -58,8 +58,8 @@ namespace TtLcd.GtkUi
             Icons.Draw(cr, Icon, c - 7.5, 34, 15, Col);
             Theme.TextCentred(cr, Value, Theme.FontName + " Bold 25", Theme.Text, c, c + 5);
             int w, h;
-            Theme.Text(cr, Label, Theme.FontName + " Bold 8", Col, 0, 0, out w, out h, true);
-            Theme.Text(cr, Label, Theme.FontName + " Bold 8", Col, c - w / 2.0, 156 - 14 - h, out w, out h);
+            Theme.DrawText(cr, Label, Theme.FontName + " Bold 8", Col, 0, 0, out w, out h, true);
+            Theme.DrawText(cr, Label, Theme.FontName + " Bold 8", Col, c - w / 2.0, 156 - 14 - h, out w, out h);
             return true;
         }
     }

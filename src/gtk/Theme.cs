@@ -87,7 +87,7 @@ tooltip, tooltip * { background-color: #1B1B1D; color: #EDEDED; }
         }
 
         // Card (CardBox in WPF): gradient fill, hairline border, the top-right corner cut off, and a red tick top-left.
-        public static void Card(Context cr, double w, double h)
+        public static void PaintCard(Context cr, double w, double h)
         {
             const double cut = 14;
             cr.NewPath();
@@ -106,7 +106,7 @@ tooltip, tooltip * { background-color: #1B1B1D; color: #EDEDED; }
         }
 
         // Text with Pango (proper font fallback); returns the pixel size.
-        public static void Text(Context cr, string text, string font, Color c, double x, double y, out int w, out int h, bool measureOnly = false)
+        public static void DrawText(Context cr, string text, string font, Color c, double x, double y, out int w, out int h, bool measureOnly = false)
         {
             var layout = Pango.CairoHelper.CreateLayout(cr);
             layout.FontDescription = Pango.FontDescription.FromString(font);
@@ -119,8 +119,8 @@ tooltip, tooltip * { background-color: #1B1B1D; color: #EDEDED; }
         public static void TextCentred(Context cr, string text, string font, Color c, double cx, double cy)
         {
             int w, h;
-            Text(cr, text, font, c, 0, 0, out w, out h, true);
-            Text(cr, text, font, c, cx - w / 2.0, cy - h / 2.0, out w, out h);
+            DrawText(cr, text, font, c, 0, 0, out w, out h, true);
+            DrawText(cr, text, font, c, cx - w / 2.0, cy - h / 2.0, out w, out h);
         }
     }
 }
