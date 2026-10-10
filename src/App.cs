@@ -1,4 +1,4 @@
-﻿// TTLcd.exe: WPF window + tray icon. Built from the same sources as ttlcd.exe with /main:TtLcd.TrayProgram.
+// TTLcd.exe: WPF window + tray icon. Built from the same sources as ttlcd.exe with /main:TtLcd.TrayProgram.
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -39,7 +39,7 @@ namespace TtLcd
                     catch (Exception) { }
                     e.Handled = true;
                 };
-                var shell = new Shell(args.Contains("--tray") || args.Contains("--screenshot"));
+                var shell = new Shell(args.Contains("--tray") || args.Contains("--screenshot") || args.Contains("--record"));
                 int si = Array.IndexOf(args, "--screenshot");
                 if (si >= 0 && si + 1 < args.Length)
                 {
@@ -50,6 +50,18 @@ namespace TtLcd
                     if (!int.TryParse(Environment.GetEnvironmentVariable("TTLCD_SHOT_DELAY"), out delay)) delay = 4;
                     var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(delay) };
                     t.Tick += (s, e) => { t.Stop(); shell.Screenshot(file, page); shell.Exit(); };
+                    t.Start();
+                }
+                int ri = Array.IndexOf(args, "--record");
+                if (ri >= 0 && ri + 2 < args.Length)
+                {
+                    // dev aid: --record <file.gif> <modes|dashboard|clock> [scale] (README media, see Record.cs)
+                    string file = args[ri + 1], scene = args[ri + 2];
+                    double scale;
+                    if (ri + 3 >= args.Length || !double.TryParse(args[ri + 3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out scale)) scale = 0.75;
+                    shell.EnsureUi();
+                    var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+                    t.Tick += (s, e) => { t.Stop(); shell.Record(file, scene, scale, shell.Exit); };
                     t.Start();
                 }
                 app.Run();
@@ -146,6 +158,12 @@ namespace TtLcd
             ui.Snapshot(file, page);
         }
 
+        public void Record(string file, string scene, double scale, Action done)
+        {
+            EnsureUi();
+            ui.Record(file, scene, scale, done);
+        }
+
         public void Exit()
         {
             icon.Visible = false;
@@ -184,7 +202,7 @@ namespace TtLcd
         }
     }
 
-    class MainUi
+    partial class MainUi
     {
         readonly Shell shell;
         readonly Window w;

@@ -34,7 +34,7 @@ set CORE=src\Version.cs src\Hid.cs src\Lcd.cs src\Render.cs src\Capture.cs src\C
 echo [1/6] ttlcd.exe
 "%CSC%" /nologo /optimize+ /unsafe /platform:x64 /target:exe /main:TtLcd.Program /win32icon:src\app.ico /out:%APP%\ttlcd.exe %REFS% %CORE% src\Program.cs || exit /b 1
 echo [2/6] TTLcdStudio.exe
-"%CSC%" /nologo /optimize+ /unsafe /platform:x64 /target:winexe /main:TtLcd.TrayProgram /win32icon:src\app.ico /resource:src\app.ico,TtLcd.app.ico /out:%APP%\TTLcdStudio.exe %REFS% %WPF% /resource:src\MainWindow.xaml,TtLcd.MainWindow.xaml %CORE% src\App.cs || exit /b 1
+"%CSC%" /nologo /optimize+ /unsafe /platform:x64 /target:winexe /main:TtLcd.TrayProgram /win32icon:src\app.ico /resource:src\app.ico,TtLcd.app.ico /out:%APP%\TTLcdStudio.exe %REFS% %WPF% /resource:src\MainWindow.xaml,TtLcd.MainWindow.xaml %CORE% src\App.cs src\Record.cs src\Gif.cs || exit /b 1
 echo [3/6] TTLcdAura.dll
 "%CSC%" /nologo /optimize+ /platform:anycpu /target:library /out:%APP%\TTLcdAura.dll /r:System.Core.dll aura\AuraHal.cs || exit /b 1
 echo [4/6] rescue tools
