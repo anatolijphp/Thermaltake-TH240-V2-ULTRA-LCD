@@ -38,7 +38,7 @@ namespace TtLcd.GtkUi
             root.PackStart(TitleBar(), false, false, 0);
             var body = new Box(Orientation.Horizontal, 0);
             body.PackStart(Nav(), false, false, 0);
-            var content = new Bloom();
+            var content = new Bloom(this);
             var cols = new Box(Orientation.Horizontal, 0);
             cols.PackStart(Pages(), true, true, 0);
             cols.PackStart(PreviewColumn(), false, false, 0);
@@ -120,7 +120,7 @@ namespace TtLcd.GtkUi
         // ---------------- navigation ----------------
         Widget Nav()
         {
-            var panel = new NavPanel { WidthRequest = 214 };
+            var panel = new NavPanel(this) { WidthRequest = 214 };
             var col = new Box(Orientation.Vertical, 0);
             var top = new Box(Orientation.Vertical, 0) { MarginTop = 10 };
             var toggle = new IconButton("menu", 40, 40, "Collapse menu") { IconSize = 16, Halign = Align.Start, MarginLeft = 13, MarginBottom = 8 };
@@ -412,6 +412,35 @@ namespace TtLcd.GtkUi
     }
 
     // Title bar background: dark strip, the brand panel with the red slash, the flowing RGB line; drag to move.
+    // Decorated=false (own title bar, see TitleBarArea below) means the window manager draws no resize grips
+    // of its own and gives the app no edge-drag resize at all unless it asks for one itself - which nothing
+    // here did. TryBegin starts one by hand (the same BeginResizeDrag the WM would use), called from every
+    // widget that covers one of the window's outer edges (TitleBarArea top, NavPanel left+bottom, Bloom
+    // right+bottom) before their own click handling.
+    static class ResizeEdge
+    {
+        public const int Margin = 6; // px from the window's outer edge that starts a resize drag
+
+        public static bool TryBegin(Window win, Widget w, Gdk.EventButton ev)
+        {
+            if (ev.Button != 1 || win.Window == null) return false;
+            if ((win.Window.State & (Gdk.WindowState.Maximized | Gdk.WindowState.Fullscreen)) != 0) return false;
+            int wx, wy;
+            w.TranslateCoordinates(win, (int)ev.X, (int)ev.Y, out wx, out wy);
+            int winW, winH; win.GetSize(out winW, out winH);
+            bool left = wx <= Margin, right = wx >= winW - Margin;
+            bool top = wy <= Margin, bottom = wy >= winH - Margin;
+            if (!left && !right && !top && !bottom) return false;
+            Gdk.WindowEdge edge =
+                top && left ? Gdk.WindowEdge.NorthWest : top && right ? Gdk.WindowEdge.NorthEast :
+                bottom && left ? Gdk.WindowEdge.SouthWest : bottom && right ? Gdk.WindowEdge.SouthEast :
+                top ? Gdk.WindowEdge.North : bottom ? Gdk.WindowEdge.South :
+                left ? Gdk.WindowEdge.West : Gdk.WindowEdge.East;
+            win.BeginResizeDrag(edge, (int)ev.Button, (int)ev.XRoot, (int)ev.YRoot, ev.Time);
+            return true;
+        }
+    }
+
     class TitleBarArea : EventBox
     {
         readonly Window win;
@@ -421,6 +450,7 @@ namespace TtLcd.GtkUi
             win = w; VisibleWindow = false; AppPaintable = true;
             ButtonPressEvent += (o, a) =>
             {
+                if (ResizeEdge.TryBegin(win, this, a.Event)) return;
                 if (a.Event.Button != 1) return;
                 if (a.Event.Type == Gdk.EventType.TwoButtonPress) { if ((win.Window.State & Gdk.WindowState.Maximized) != 0) win.Unmaximize(); else win.Maximize(); return; }
                 win.BeginMoveDrag((int)a.Event.Button, (int)a.Event.XRoot, (int)a.Event.YRoot, a.Event.Time);
@@ -451,7 +481,7 @@ namespace TtLcd.GtkUi
     class NavPanel : EventBox
     {
         public Widget Footer;
-        public NavPanel() { VisibleWindow = false; AppPaintable = true; }
+        public NavPanel(Window win) { VisibleWindow = false; AppPaintable = true; ButtonPressEvent += (o, a) => ResizeEdge.TryBegin(win, this, a.Event); }
         protected override bool OnDrawn(Context cr)
         {
             Theme.Set(cr, Theme.Panel); cr.Rectangle(0, 0, Allocation.Width, Allocation.Height); cr.Fill();
@@ -463,7 +493,7 @@ namespace TtLcd.GtkUi
     // Faint red bloom behind the content, as in the WPF window.
     class Bloom : EventBox
     {
-        public Bloom() { VisibleWindow = false; AppPaintable = true; }
+        public Bloom(Window win) { VisibleWindow = false; AppPaintable = true; ButtonPressEvent += (o, a) => ResizeEdge.TryBegin(win, this, a.Event); }
         protected override bool OnDrawn(Context cr)
         {
             double w = Allocation.Width, h = Allocation.Height;
