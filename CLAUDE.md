@@ -146,16 +146,25 @@ Water temperature is then polled at `GameSensorMs`. The CPU-temp helper reads it
 ## Linux
 
 - `build.sh` (Mono `mcs`, file lists taken from `build.cmd` CORE and STUDIO) builds `build/linux/`: `ttlcd.exe` and
-  `TTLcdStudio.exe` (GTK, `-pkg:gtk-sharp-3.0`), each into its own package: `ttlcd_<ver>_all.deb` (CLI + service,
-  `pkg/`, no GTK dependency) and `ttlcd-studio_<ver>_all.deb` (`pkg-studio/`, needs `libgtk3.0-cil`), plus one
-  tarball with both. Packaging files are in `linux/` (launchers `ttlcd` / `ttlcd-studio`, desktop entry, icon, udev
-  rule, systemd user unit, `control` + `control-studio`, postinst).
-  - **Why two packages (2026-10-11):** `libgtk3.0-cil` (GTK# 3) was removed from Debian in 2023 and is gone from
-    Ubuntu from 25.10 questing onward (still in 24.04 noble) - a single package depending on it failed to install
-    on a 26.04 resolute machine. `ttlcd` itself has no GTK dependency, so it was split out; it now installs
-    everywhere `mono-runtime` does. `build.sh` builds `ttlcd-studio` only when `pkg-config --exists gtk-sharp-3.0`
-    (apt install `libgtk3.0-cil-dev` for that); otherwise it logs a notice and still produces `ttlcd`. Where
-    `libgtk3.0-cil` isn't installable there is no current fix for the GTK window itself - use the CLI/service.
+  `TTLcdStudio.exe`, each into its own package: `ttlcd_<ver>_all.deb` (CLI + service, `pkg/`, no GTK dependency)
+  and `ttlcd-studio_<ver>_all.deb` (`pkg-studio/`, bundles GTK# 3 - see below), plus one tarball with both.
+  Packaging files are in `linux/` (launchers `ttlcd` / `ttlcd-studio`, desktop entry, icon, udev rule, systemd
+  user unit, `control` + `control-studio`, postinst).
+  - **Why two packages, and GTK# is bundled, not depended on (2026-10-11):** `libgtk3.0-cil` (GTK# 3) was removed
+    from Debian in 2023 and is gone from Ubuntu entirely from 25.10 questing onward (still in 24.04 noble) - a
+    single package depending on it failed to install on a 26.04 resolute machine. `ttlcd` (CLI + service) has no
+    GTK dependency at all, so it's a separate package that installs everywhere `mono-runtime` does.
+    `ttlcd-studio` can't depend on the system package any more (it's gone for good, not coming back), so
+    `fetch_gtksharp3()` in `build.sh` downloads the last Ubuntu noble build of gtk-sharp3 straight from
+    archive.ubuntu.com (pinned exact version + SHA256, cached in `build/.gtksharp3-cache/`) and bundles the
+    7 managed assemblies + 4 native glue `.so`s next to `TTLcdStudio.exe` in `/usr/lib/ttlcd/`; Mono resolves
+    both from there without the GAC or any system gtk-sharp3 package. The 4 native glue libs' `.dll.config`
+    hardcodes `/usr/lib/ttlcd/lib*sharpglue-3.so` (patched from their original `/usr/lib/cli/...` path at fetch
+    time) - that's where every install (`.deb` or tarball) puts them, regardless of the build machine's own
+    paths. `linux/control-studio`'s `Depends` lists only the native GTK3/GLib/Pango/Atk/Cairo libraries (with
+    `| ...t64` alternatives for the Ubuntu 24.04→26.04 time_t64 package rename) - those aren't going anywhere.
+    Verified end to end on 26.04 resolute: fetched, built, installed via `apt install`, `ttlcd-studio` launched
+    for real (`--screenshot dashboard` rendered the live gauges, cooler detected over hidraw).
 - GTK Studio: Linux modes only (Image, GIF, Colour, Clock, Off); no game detection (manual game mode); CPU temperature
   from hwmon. It stops the `ttlcd` user service while open. GTK# is the old 2.99.3 binding: use GTK 3.0 API only (no
   FlowBox/Stack/HeaderBar, MarginLeft/Right instead of Start/End). `System.Action` must be qualified (Gtk.Action).

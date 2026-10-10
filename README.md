@@ -100,13 +100,14 @@ TT LCD Studio runs on Ubuntu too, with the same look: a native GTK window over t
 <img src="docs/media/ubuntu-dashboard.png" alt="TT LCD Studio on Ubuntu: dashboard and live preview" width="860">
 
 ```
-sudo apt install ./ttlcd_1.2.1_all.deb ./ttlcd-studio_1.2.1_all.deb   # from the release; pulls in Mono and GTK#
+sudo apt install ./ttlcd_1.2.2_all.deb ./ttlcd-studio_1.2.2_all.deb   # from the release
 ttlcd-studio                                                          # or "TT LCD Studio" in the app menu
 ```
 
-`ttlcd-studio` is a separate package because it needs `libgtk3.0-cil` (GTK# 3), which Debian dropped in 2023 and
-which some distributions no longer carry at all (gone from Ubuntu since 25.10; still in 24.04). Where it isn't
-installable, skip it and install just `ttlcd_1.2.1_all.deb` for the command line and service below.
+`ttlcd-studio` is a separate package (it depends on `ttlcd` and installs it too if it's missing) and bundles
+GTK# 3 itself, since Debian dropped `libgtk3.0-cil` from its archives in 2023 and it's gone from Ubuntu entirely
+from 25.10 onward. Only the native GTK3/GLib/Pango/Atk/Cairo libraries are needed from the system - those are
+still part of any current desktop - so both packages install cleanly on 26.04 too.
 
 - **Everything Linux can do, in the window:**
   - dashboard
@@ -131,16 +132,15 @@ ttlcd config                              # all settings (~/.config/ttlcd/config
 ```
 
 Studio stops this service while its window is open, so the two never drive the cooler at the same time. Other
-distributions: unpack `ttlcd-<version>-linux.tar.gz` to `/` and install Mono and libgdiplus (and GTK# 3 too, for
-the window, if that's available - see above).
+distributions: unpack `ttlcd-<version>-linux.tar.gz` to `/` and install Mono and libgdiplus (and the native GTK3
+libraries from "Everything Linux can do" above, for the window).
 </details>
 
 ## Build from source
 
 **Windows:** `build.cmd` uses the .NET Framework 4.8 C# compiler that ships with it. No SDK,
-no NuGet. **Linux:** `./build.sh` with Mono (`sudo apt install mono-devel`); it compiles the same sources. Add
-`libgtk3.0-cil-dev` too to also build `ttlcd-studio` - `build.sh` skips it and builds just `ttlcd` when that's
-missing, which is the case on distributions that dropped GTK# 3 (Ubuntu 25.10 and newer).
+no NuGet. **Linux:** `./build.sh` with Mono (`sudo apt install mono-devel`) and `curl`; it compiles the same
+sources and fetches GTK# 3 itself (pinned, checksummed, see `build.sh`) rather than needing it preinstalled.
 
 ```
 git clone https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD.git
@@ -161,7 +161,7 @@ Sources and build output are kept apart. Everything built lands in `build\<os>\`
 | `build/linux/` | What |
 |---|---|
 | `ttlcd_<version>_all.deb` | Debian/Ubuntu package: `ttlcd` (CLI + service), udev rule, systemd user service |
-| `ttlcd-studio_<version>_all.deb` | Debian/Ubuntu package: `ttlcd-studio` (GTK window), menu entry. Needs `ttlcd` and `libgtk3.0-cil`; not built if that's unavailable |
+| `ttlcd-studio_<version>_all.deb` | Debian/Ubuntu package: `ttlcd-studio` (GTK window, bundles GTK# 3), menu entry; depends on and installs `ttlcd` |
 | `ttlcd-<version>-linux.tar.gz` | The same files for other distributions |
 | `pkg/`, `pkg-studio/` | The installed layouts |
 

@@ -2,7 +2,7 @@ Package: ttlcd-studio
 Version: @VERSION@
 Architecture: all
 Maintainer: anatolijphp <anatolijphp@users.noreply.github.com>
-Depends: ttlcd (= @VERSION@), libgtk3.0-cil
+Depends: ttlcd (= @VERSION@), libgtk-3-0 | libgtk-3-0t64, libglib2.0-0 | libglib2.0-0t64, libgdk-pixbuf-2.0-0 | libgdk-pixbuf2.0-0, libpango-1.0-0, libcairo2, libatk1.0-0 | libatk1.0-0t64
 Recommends: libayatana-appindicator3-1
 Section: utils
 Priority: optional
@@ -10,7 +10,8 @@ Homepage: https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD
 Description: TT LCD Studio window for the Thermaltake TH240 V2 Ultra (CL-W383) LCD
  GTK window over the ttlcd package: dashboard, live preview, display modes
  (image, GIF, colour, clock, off), device and settings pages, idle picture.
- Needs libgtk3.0-cil (GTK# 3 for Mono), which Debian/Ubuntu dropped from
- their archives (gone since Ubuntu 25.10; still packaged in 24.04). Where
- it isn't installable, use the ttlcd command line and systemd service
- instead (this package just won't install, ttlcd is unaffected).
+ Bundles GTK# 3 (gtk-sharp3, LGPL-2.1) next to TTLcdStudio.exe, since Debian
+ dropped that binding from its archives in 2023 (gone from Ubuntu since
+ 25.10); only the native GTK3/GLib/Pango/Atk/Cairo libraries above are
+ needed from the system, so this installs on any current Debian/Ubuntu,
+ 26.04 included. See build.sh for where the bundled copy comes from.

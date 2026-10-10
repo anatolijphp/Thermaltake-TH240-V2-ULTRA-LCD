@@ -71,14 +71,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Mono's C# compiler builds the same sources (build.sh takes the file list from build.cmd). libgtk3.0-cil-dev
-      # is only for TTLcdStudio.exe / the ttlcd-studio package; build.sh skips both if it's missing (the package
-      # was dropped from Debian/Ubuntu - gone since 25.10 questing, still in 24.04 noble).
+      # Mono's C# compiler builds the same sources (build.sh takes the file list from build.cmd). GTK# itself
+      # (gtk-sharp3) isn't installed here: build.sh fetches and bundles it straight from Ubuntu's archive (pinned
+      # version + SHA256, see build.sh), since the system package was dropped from Debian/Ubuntu in 2023.
       - name: Install Mono
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq mono-devel >/dev/null
-          sudo apt-get install -y -qq libgtk3.0-cil-dev >/dev/null || echo "libgtk3.0-cil-dev unavailable on this runner - ttlcd-studio will be skipped" >&2
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mono-devel >/dev/null
 
       - name: Build
         run: ./build.sh
@@ -97,19 +94,14 @@ jobs:
             ttlcd config | grep -q "Mode = Clock"
             ttlcd probe || true
             test -s /tmp/clock.jpg && test -f /lib/udev/rules.d/60-ttlcd.rules && test -f /usr/lib/systemd/user/ttlcd.service
-            # ttlcd-studio is a separate package (needs libgtk3.0-cil, dropped upstream on newer distros); build.sh
-            # skips building it when gtk-sharp-3.0 was unavailable on the runner, so only test it when it is there.
-            if ls /pkg/ttlcd-studio_*_all.deb >/dev/null 2>&1; then
-              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd-studio_*_all.deb xvfb xauth fonts-ubuntu >/dev/null
-              mkdir -p /pkg/shots
-              for p in dashboard modes:Clock modes:Image device settings idle; do
-                xvfb-run -a -s "-screen 0 1400x1400x24" env TTLCD_SHOT_HEIGHT=1300 ttlcd-studio --screenshot /pkg/shots/linux-$(echo $p | tr : _).png $p
-              done
-              xvfb-run -a -s "-screen 0 1400x1400x24" env TTLCD_SHOT_HEIGHT=1300 TTLCD_SHOT_SELECT=ClkItems:0 ttlcd-studio --screenshot /pkg/shots/linux-modes_Clock_style.png modes:Clock
-              test -s /pkg/shots/linux-dashboard.png
-            else
-              echo "ttlcd-studio_*_all.deb not built - skipping Studio screenshots" >&2
-            fi
+            # ttlcd-studio bundles GTK# itself, so it installs with just the native GTK3/glib/pango/atk/cairo libs
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd-studio_*_all.deb xvfb xauth fonts-ubuntu >/dev/null
+            mkdir -p /pkg/shots
+            for p in dashboard modes:Clock modes:Image device settings idle; do
+              xvfb-run -a -s "-screen 0 1400x1400x24" env TTLCD_SHOT_HEIGHT=1300 ttlcd-studio --screenshot /pkg/shots/linux-$(echo $p | tr : _).png $p
+            done
+            xvfb-run -a -s "-screen 0 1400x1400x24" env TTLCD_SHOT_HEIGHT=1300 TTLCD_SHOT_SELECT=ClkItems:0 ttlcd-studio --screenshot /pkg/shots/linux-modes_Clock_style.png modes:Clock
+            test -s /pkg/shots/linux-dashboard.png
           '
 
       - uses: actions/upload-artifact@v4
