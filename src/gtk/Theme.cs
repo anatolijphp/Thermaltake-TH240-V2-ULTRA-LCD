@@ -47,6 +47,23 @@ button.flat {
   background-image: none; background-color: transparent; border: none; box-shadow: none; padding: 0; min-height: 0; min-width: 0;
 }
 button.flat:hover { background-color: rgba(255,255,255,0.13); }
+button.accent, button.btn {
+  background-image: none; box-shadow: none; text-shadow: none; border-radius: 2px; padding: 6px 16px; min-height: 0;
+}
+button.accent { background-color: #FF1F4B; color: #FFFFFF; border: 1px solid #FF1F4B; }
+button.accent:hover { background-color: #FF3D63; }
+button.accent:disabled { background-color: #4A1020; border-color: #4A1020; color: #8F8F94; }
+button.btn { background-color: #1B1B1D; color: #EDEDED; border: 1px solid #29292C; }
+button.btn:hover { border-color: #46464B; }
+button.btn:disabled { color: #55555A; }
+button.accent label, button.btn label { color: inherit; }
+entry { background-color: #0D0D0E; color: #EDEDED; border: 1px solid #29292C; border-radius: 2px; box-shadow: none; padding: 4px 8px; }
+combobox button, combobox box { background-image: none; background-color: #0D0D0E; color: #EDEDED; border-color: #29292C; box-shadow: none; text-shadow: none; }
+combobox * { color: #EDEDED; }
+menu, .menu, menuitem { background-color: #131314; color: #EDEDED; }
+menuitem:hover { background-color: #2A0A12; }
+progressbar trough { background-color: #2A2A2E; border: none; min-height: 6px; }
+progressbar progress { background-color: #00E1FF; border: none; min-height: 6px; }
 scrollbar { background-color: transparent; border: none; }
 scrollbar slider { background-color: rgba(255,255,255,0.18); border-radius: 4px; min-width: 6px; min-height: 6px; border: none; }
 tooltip, tooltip * { background-color: #1B1B1D; color: #EDEDED; }
@@ -114,6 +131,14 @@ tooltip, tooltip * { background-color: #1B1B1D; color: #EDEDED; }
             layout.GetPixelSize(out w, out h);
             if (!measureOnly) { Set(cr, c); cr.MoveTo(x, y); Pango.CairoHelper.ShowLayout(cr, layout); }
             layout.Dispose();
+        }
+
+        // Left-aligned text, vertically centred on cy.
+        public static void DrawTextLeft(Context cr, string text, string font, Color c, double x, double cy)
+        {
+            int w, h;
+            DrawText(cr, text, font, c, 0, 0, out w, out h, true);
+            DrawText(cr, text, font, c, x, cy - h / 2.0, out w, out h);
         }
 
         public static void TextCentred(Context cr, string text, string font, Color c, double cx, double cy)

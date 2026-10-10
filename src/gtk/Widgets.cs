@@ -341,6 +341,28 @@ namespace TtLcd.GtkUi
                     for (int i = 0; i < 4; i++) cr.Rectangle(5.5 + i * 3.8, 10, 2.2, 4);
                     cr.Fill();
                     break;
+                case "power":
+                    cr.Arc(12, 13, 8, -Math.PI * 0.32, Math.PI * 1.32); cr.Stroke();
+                    cr.MoveTo(12, 3); cr.LineTo(12, 12); cr.Stroke();
+                    break;
+                case "image":
+                    Theme.RoundRect(cr, 3, 4, 18, 16, 2); cr.Stroke();
+                    cr.MoveTo(3.5, 17); cr.LineTo(9, 11.5); cr.LineTo(13, 15.5); cr.LineTo(16, 12.5); cr.LineTo(20.5, 17); cr.Stroke();
+                    cr.Arc(15.5, 8.5, 1.6, 0, 2 * Math.PI); cr.Stroke();
+                    break;
+                case "gif": // play triangle
+                    cr.MoveTo(7, 4); cr.LineTo(19, 12); cr.LineTo(7, 20); cr.ClosePath(); cr.Stroke();
+                    break;
+                case "palette":
+                    cr.Arc(12, 12, 9, 0, 2 * Math.PI); cr.Stroke();
+                    foreach (var p in new[] { new[] { 8.0, 9.0 }, new[] { 12.0, 7.0 }, new[] { 16.0, 9.5 }, new[] { 8.5, 14.0 } })
+                    { cr.Arc(p[0], p[1], 1.4, 0, 2 * Math.PI); cr.Fill(); }
+                    cr.Arc(15, 15.5, 2.2, 0, 2 * Math.PI); cr.Stroke();
+                    break;
+                case "clock":
+                    cr.Arc(12, 12, 9, 0, 2 * Math.PI); cr.Stroke();
+                    cr.MoveTo(12, 7); cr.LineTo(12, 12); cr.LineTo(15.5, 14); cr.Stroke();
+                    break;
                 case "check": cr.MoveTo(5, 12.5); cr.LineTo(10, 17.5); cr.LineTo(19.5, 7); cr.Stroke(); break;
                 case "plus": cr.MoveTo(12, 5); cr.LineTo(12, 19); cr.MoveTo(5, 12); cr.LineTo(19, 12); cr.Stroke(); break;
             }

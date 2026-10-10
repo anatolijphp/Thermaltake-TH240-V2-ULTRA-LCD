@@ -7,7 +7,7 @@ using Gtk;
 
 namespace TtLcd.GtkUi
 {
-    class StudioWindow : Window
+    partial class StudioWindow : Window
     {
         readonly StudioCore core;
         readonly StudioModel model;
@@ -138,6 +138,7 @@ namespace TtLcd.GtkUi
             foreach (var p in pages) p.Value.Visible = p.Key == page;
             foreach (var n in navs) n.Value.On = n.Key == page;
             if (page == "dashboard") UpdateDashboard();
+            if (page == "modes") ShowOptions();
         }
 
         // ---------------- pages ----------------
@@ -147,9 +148,9 @@ namespace TtLcd.GtkUi
             scroll.SetPolicy(PolicyType.Never, PolicyType.Automatic);
             var stack = new Box(Orientation.Vertical, 0) { MarginLeft = 30, MarginRight = 24, MarginTop = 24, MarginBottom = 10 };
             pages["dashboard"] = Dashboard();
-            pages["modes"] = Placeholder("Display modes", "Choose what the cooler screen shows. Changes apply instantly.");
-            pages["device"] = Placeholder("Device", "Screen settings that live on the cooler.");
-            pages["settings"] = Placeholder("Settings", "Streaming quality and how the app starts.");
+            pages["modes"] = ModesPage();
+            pages["device"] = DevicePage();
+            pages["settings"] = SettingsPage();
             foreach (var p in pages.Values) { p.NoShowAll = false; stack.PackStart(p, false, false, 0); }
             scroll.Add(stack);
             return scroll;
@@ -327,6 +328,7 @@ namespace TtLcd.GtkUi
             fpsText.Text = model.FpsText;
             modeText.Text = Note ?? model.ModeText;
             navSerial.Text = model.NavSerial;
+            UpdatePages();
             gameBtn.Checked = core.Engine.ForceGame; gameBtn.QueueDraw();
             connDot.QueueDraw();
         }
@@ -334,6 +336,23 @@ namespace TtLcd.GtkUi
         // ---------------- screenshot (dev aid / CI) ----------------
         public void Screenshot(string file, string page)
         {
+            // "modes:Clock" shows that mode's options; TTLCD_SHOT_SELECT=ClkItems:0 selects a reading (style panel)
+            int colon = page.IndexOf(':');
+            if (colon > 0)
+            {
+                var m = (Mode)Enum.Parse(typeof(Mode), page.Substring(colon + 1), true);
+                core.Change(c => c.Mode = m);
+                page = page.Substring(0, colon);
+                Load();
+            }
+            var pick = Environment.GetEnvironmentVariable("TTLCD_SHOT_SELECT");
+            if (!string.IsNullOrEmpty(pick) && pick.Contains(":"))
+            {
+                var ed = pick.StartsWith("Ov") ? overlayLines : clockLines;
+                ed.Selected = int.Parse(pick.Split(':')[1]);
+                selEditor = ed;
+                ShowStyleEditor();
+            }
             ShowPage(page);
             while (Application.EventsPending()) Application.RunIteration();
             UpdatePreview(); UpdateStatus(); UpdateDashboard();

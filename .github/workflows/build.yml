@@ -95,9 +95,10 @@ jobs:
             # the Studio window under a virtual X display, one PNG per page
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb xauth fonts-ubuntu >/dev/null
             mkdir -p /pkg/shots
-            for p in dashboard modes device settings; do
-              xvfb-run -a -s "-screen 0 1400x1000x24" ttlcd-studio --screenshot /pkg/shots/linux-$p.png $p
+            for p in dashboard modes:Clock modes:Image device settings; do
+              xvfb-run -a -s "-screen 0 1400x1400x24" env TTLCD_SHOT_HEIGHT=1300 ttlcd-studio --screenshot /pkg/shots/linux-$(echo $p | tr : _).png $p
             done
+            xvfb-run -a -s "-screen 0 1400x1400x24" env TTLCD_SHOT_HEIGHT=1300 TTLCD_SHOT_SELECT=ClkItems:0 ttlcd-studio --screenshot /pkg/shots/linux-modes_Clock_style.png modes:Clock
             test -s /pkg/shots/linux-dashboard.png
           '
 

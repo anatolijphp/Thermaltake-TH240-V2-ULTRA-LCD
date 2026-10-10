@@ -36,6 +36,7 @@ namespace TtLcd.GtkUi
             int height;
             if (int.TryParse(Environment.GetEnvironmentVariable("TTLCD_SHOT_HEIGHT"), out height)) win.SetDefaultSize(1240, height);
             win.ShowAll();
+            win.Load();
             win.ShowPage("dashboard");
 
             if (si >= 0 && si + 1 < args.Length)
