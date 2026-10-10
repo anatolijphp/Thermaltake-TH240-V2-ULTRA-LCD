@@ -100,7 +100,7 @@ sensor face (coolant temperature from the cooler, CPU temperature from the kerne
 image, an animated GIF or a colour. The Studio window, Wallpaper Engine, Aura Sync and screen mirroring are Windows-only.
 
 ```
-sudo apt install ./ttlcd_1.0.0_all.deb       # from the release; pulls in Mono
+sudo apt install ./ttlcd_1.1.0_all.deb       # from the release; pulls in Mono
 systemctl --user enable --now ttlcd       # drive the screen, also after every login
 ttlcd set Mode Clock                      # or Image / Gif / Color / Off; the service picks it up
 ttlcd set GifPath ~/Pictures/loop.gif
