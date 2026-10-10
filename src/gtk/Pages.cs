@@ -187,7 +187,7 @@ namespace TtLcd.GtkUi
             stFont.Changed += (o, a) => { string n = stFont.ActiveText; if (n != null && !n.EndsWith(" (not installed)")) EditStyle(st => st.Font = n); };
             stBold = StyleChip("Bold", v => EditStyle(st => st.Bold = v));
             stItalic = StyleChip("Italic", v => EditStyle(st => st.Italic = v));
-            var fontRow = new Box(Orientation.Horizontal, 8);
+            var fontRow = new Box(Orientation.Horizontal, 8) { Hexpand = true };
             fontRow.PackStart(stFont, true, true, 0); fontRow.PackStart(stBold, false, false, 0); fontRow.PackStart(stItalic, false, false, 0);
             b.PackStart(Ui.Row("Font", fontRow), false, false, 0);
 

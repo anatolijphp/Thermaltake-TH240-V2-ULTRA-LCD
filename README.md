@@ -95,25 +95,45 @@ Uninstalling keeps your settings in `%APPDATA%\ttlcd`. The shared Aura plugin an
 
 ### Ubuntu / Linux
 
-The Linux version is the command-line tool plus a background service that drives the screen. It shows the clock and
-sensor face (coolant temperature from the cooler, CPU temperature from the kernel's sensor driver, CPU load), an
-image, an animated GIF or a colour. The Studio window, Wallpaper Engine, Aura Sync and screen mirroring are Windows-only.
+TT LCD Studio runs on Ubuntu too, with the same look: a native GTK window over the same engine and settings.
+
+<img src="docs/media/ubuntu-dashboard.png" alt="TT LCD Studio on Ubuntu: dashboard and live preview" width="860">
 
 ```
-sudo apt install ./ttlcd_1.1.0_all.deb       # from the release; pulls in Mono
+sudo apt install ./ttlcd_1.1.0_all.deb    # from the release; pulls in Mono and GTK#
+ttlcd-studio                              # or "TT LCD Studio" in the app menu
+```
+
+- **Everything Linux can do, in the window:**
+  - dashboard
+  - Image, GIF, Colour, Clock and Off modes with the overlay
+  - drag-and-drop lines and per-reading styles
+  - device and streaming settings
+  - the idle picture
+  - tray icon (AppIndicator) and start with the desktop session
+- **CPU temperature:** read straight from the kernel's sensor driver (k10temp, zenpower, coretemp); nothing to install.
+- **Windows-only for now:** Wallpaper Engine, Aura Sync, screen mirroring, video and automatic game detection.
+  Game mode can still be switched on by hand.
+- **Cooler access without root:** the package adds a udev rule (replug the cooler or reboot once after installing).
+
+<details>
+<summary>Without the window: the command line and a background service</summary>
+
+```
 systemctl --user enable --now ttlcd       # drive the screen, also after every login
 ttlcd set Mode Clock                      # or Image / Gif / Color / Off; the service picks it up
 ttlcd set GifPath ~/Pictures/loop.gif
 ttlcd config                              # all settings (~/.config/ttlcd/config.xml)
 ```
 
-The package adds a udev rule so your user can reach the cooler without root (replug it or reboot once after
-installing). Other distributions: unpack `ttlcd-<version>-linux.tar.gz` to `/` and install Mono and libgdiplus.
+Studio stops this service while its window is open, so the two never drive the cooler at the same time. Other
+distributions: unpack `ttlcd-<version>-linux.tar.gz` to `/` and install Mono, libgdiplus and GTK# 3.
+</details>
 
 ## Build from source
 
 **Windows:** `build.cmd` uses the .NET Framework 4.8 C# compiler that ships with it. No SDK,
-no NuGet. **Linux:** `./build.sh` with Mono (`sudo apt install mono-devel`); it compiles the same sources.
+no NuGet. **Linux:** `./build.sh` with Mono and GTK# (`sudo apt install mono-devel libgtk3.0-cil-dev`); it compiles the same sources.
 
 ```
 git clone https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD.git
@@ -133,7 +153,7 @@ Sources and build output are kept apart. Everything built lands in `build\<os>\`
 
 | `build/linux/` | What |
 |---|---|
-| `ttlcd_<version>_all.deb` | Debian/Ubuntu package: `/usr/bin/ttlcd`, udev rule, systemd user service |
+| `ttlcd_<version>_all.deb` | Debian/Ubuntu package: `ttlcd-studio` (GTK window), `ttlcd`, udev rule, systemd user service, menu entry |
 | `ttlcd-<version>-linux.tar.gz` | The same files for other distributions |
 | `pkg/` | The installed layout |
 
@@ -166,7 +186,8 @@ rotation), encodes it and streams it at up to 30 fps. The protocol is documented
 
 | Path | What |
 |---|---|
-| [`src/`](src) | App, CLI and protocol (C# 5, WPF) |
+| [`src/`](src) | Engine, protocol, CLI and the shared Studio logic; the WPF window (Windows) |
+| [`src/gtk/`](src/gtk) | The GTK window (Linux) |
 | [`aura/`](aura) | Armoury Crate HAL plugin |
 | [`installer/`](installer) | Installer and uninstaller |
 | [`driver/`](driver) | Bundled MttVDD virtual display driver (signed, MIT) |

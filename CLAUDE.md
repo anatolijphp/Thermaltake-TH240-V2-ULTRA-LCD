@@ -7,7 +7,7 @@ Owner rules:
 - **Install nothing.** Use only built-in Windows tools (C# 5 / .NET 4.8 `csc`) and files inside this folder.
 - A driver is allowed only if this tool installs and uninstalls it.
 - Do the work yourself, with no "split the work".
-- Linux: started 2026-10-10 (Ubuntu build: CLI + screen service, see "Linux" below).
+- Linux: Ubuntu build with the GTK Studio window, CLI and screen service (see "Linux" below).
 
 Full conversation transcript (very long):
 `C:\Users\anato\.claude\projects\C--Users-anato\87ff2591-a9e9-489b-9bea-a8a27fdb3ba3.jsonl`
@@ -62,7 +62,9 @@ checksums, smoke-tests a silent install and uninstall, tests the .deb in a conta
 | `src/Render.cs` `Capture.cs` `Video.cs` | Compose/rotate/JPEG; GDI screen capture; Media Foundation video → 480×480 frames (cached) |
 | `src/Engine.cs` | Renderer + sender threads; control/upload jobs on the control thread; `timeBeginPeriod(1)` |
 | `src/Config.cs` | `%APPDATA%\ttlcd\config.xml`. Modes: VirtualDisplay, Monitor, Image, Gif, Video, Color, Clock, Aura, Off |
-| `src/App.cs` `MainWindow.xaml` | Armoury-Crate-style WPF UI with preview, tray, `--tray`, `--screenshot` dev aid |
+| `src/Studio.cs` `StudioModel.cs` `Readings.cs` `IdleEditor.cs` `Platform.cs` | UI-free Studio logic shared by both windows: StudioCore (engine, debounced save), texts/panels/rotation/dashboard, reading lines + LineDrag, idle-picture pipeline, IPlatform (Windows/Linux services). build.cmd list `STUDIO` |
+| `src/App.cs` `MainWindow.xaml` | Windows window (WPF) over the shared core: tray, `--tray`, `--screenshot`, `--record` dev aids |
+| `src/gtk/` | Linux window (GTK# 3 + Cairo, styled like the WPF one): `StudioWindow` (+ `Pages`, `IdleView`), `Controls`/`Widgets` (custom-drawn seg toggle, slider, switch, tiles, gauges, round preview, icons), `LineEditor`, `Tray` (AppIndicator, single instance via 127.0.0.1:47913), `Theme` (colours + CSS) |
 | `src/VirtualDisplay.cs` + `driver/` | Bundled MttVDD IddCx virtual 480×480 monitor (for Wallpaper Engine); install/uninstall |
 | `src/Aura.cs` + `aura/AuraHal.cs` | ASUS Aura (Armoury Crate) HAL COM plugin + installer + MilkDrop-style feedback visualiser |
 | `src/Storage.cs` | Idle/boot upload + boot.pak builder. **Dangerous, see above.** Not wired into the UI |
@@ -143,16 +145,23 @@ Water temperature is then polled at `GameSensorMs`. The CPU-temp helper reads it
 
 ## Linux
 
-- `build.sh` (Mono `mcs`, file list taken from `build.cmd` CORE) builds `build/linux/`: `ttlcd_<ver>_all.deb`, a tarball,
-  and `pkg/` (installed layout). Packaging files are in `linux/` (launcher, udev rule, systemd user unit, control, postinst).
+- `build.sh` (Mono `mcs`, file lists taken from `build.cmd` CORE and STUDIO) builds `build/linux/`: `ttlcd.exe`,
+  `TTLcdStudio.exe` (GTK, `-pkg:gtk-sharp-3.0`), `ttlcd_<ver>_all.deb`, a tarball and `pkg/` (installed layout). Packaging files
+  are in `linux/` (launchers `ttlcd` / `ttlcd-studio`, desktop entry, icon, udev rule, systemd user unit, control, postinst).
+- GTK Studio: Linux modes only (Image, GIF, Colour, Clock, Off); no game detection (manual game mode); CPU temperature
+  from hwmon. It stops the `ttlcd` user service while open. GTK# is the old 2.99.3 binding: use GTK 3.0 API only (no
+  FlowBox/Stack/HeaderBar, MarginLeft/Right instead of Start/End). `System.Action` must be qualified (Gtk.Action).
+- `TTLcdStudio.exe --screenshot <png> <dashboard|modes[:Mode]|device|settings|idle>` (also `TTLCD_SHOT_SELECT`,
+  `TTLCD_SHOT_HEIGHT`) reads the window pixels from X; CI runs it under Xvfb and uploads `screenshots-linux` next to the
+  WPF `screenshots-windows`. No local Mono/GTK (install-nothing rule): the Linux UI is checked through these.
 - `src/LinuxHid.cs`: `Os.Linux`, `Os.Supports(mode)` (Image, Gif, Color, Clock, Off), hidraw enumeration through
   `/sys/class/hidraw/*/device/uevent` (HID_ID, HID_PHYS ".../inputN" = interface). hidraw reads return the report
   without the report-ID byte; `Lcd.ReadCtrl` shifts it. Mono named mutexes are per process only.
 - Engine on Linux: `/proc/stat` CPU load, `/proc/meminfo` RAM, hwmon (k10temp/zenpower/coretemp) CPU temperature;
   no timeBeginPeriod, game detection or sensor map.
 - CLI: `run` (headless service, reloads config.xml on change), `config`, `set <field> <value>`, `render <jpg> [mode]`.
-- CI `linux` job installs the .deb in a clean `ubuntu:24.04` container and renders frames. Not yet tested on real
-  hardware under Linux.
+- CI `linux` job installs the .deb in a clean `ubuntu:24.04` container, renders frames and screenshots every Studio page.
+  Not yet tested on real hardware or a real desktop under Linux.
 
 ## GitHub
 
