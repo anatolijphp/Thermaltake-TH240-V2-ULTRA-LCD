@@ -338,13 +338,16 @@ namespace TtLcd.GtkUi
             while (Application.EventsPending()) Application.RunIteration();
             UpdatePreview(); UpdateStatus(); UpdateDashboard();
             while (Application.EventsPending()) Application.RunIteration();
+            // what the X server shows for the window (Xvfb in CI), as a user would see it
             var a = Allocation;
-            using (var surf = new ImageSurface(Format.Argb32, a.Width, a.Height))
-            {
-                using (var cr = new Context(surf)) Draw(cr);
-                surf.WriteToPng(file);
-            }
+            Window.ProcessUpdates(true);
+            IntPtr p = gdk_pixbuf_get_from_window(Window.Handle, 0, 0, a.Width, a.Height);
+            if (p == IntPtr.Zero) throw new InvalidOperationException("could not read the window's pixels");
+            using (var pix = new Gdk.Pixbuf(p)) pix.Save(file, "png");
         }
+
+        [System.Runtime.InteropServices.DllImport("libgdk-3.so.0")]
+        static extern IntPtr gdk_pixbuf_get_from_window(IntPtr window, int x, int y, int width, int height);
     }
 
     // Title bar background: dark strip, the brand panel with the red slash, the flowing RGB line; drag to move.
