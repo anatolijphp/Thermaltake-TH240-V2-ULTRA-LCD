@@ -1161,10 +1161,6 @@
             </Button>
           </DockPanel>
           <Grid Width="344" Height="344" HorizontalAlignment="Center" Margin="0,14,0,0">
-            <!-- the glow sits on a static ring: an effect on the animated ring left white wedges on the GPU path -->
-            <Ellipse StrokeThickness="4" Margin="2" Stroke="#FF1F4B">
-              <Ellipse.Effect><DropShadowEffect Color="#FF1F4B" BlurRadius="30" ShadowDepth="0" Opacity="0.7"/></Ellipse.Effect>
-            </Ellipse>
             <Ellipse StrokeThickness="4" Margin="2">
               <Ellipse.Stroke>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
@@ -1176,6 +1172,7 @@
                   <GradientStop Color="#FF2BD6" Offset="1"/>
                 </LinearGradientBrush>
               </Ellipse.Stroke>
+              <Ellipse.Effect><DropShadowEffect Color="#FF1F4B" BlurRadius="30" ShadowDepth="0" Opacity="0.7"/></Ellipse.Effect>
               <Ellipse.Triggers>
                 <EventTrigger RoutedEvent="FrameworkElement.Loaded">
                   <BeginStoryboard>
@@ -1194,7 +1191,9 @@
               <Image.Clip><EllipseGeometry Center="164,164" RadiusX="164" RadiusY="164"/></Image.Clip>
             </Image>
             <!-- upload / read progress around the preview -->
-            <Path x:Name="IdleRing" Stroke="{StaticResource Accent2}" StrokeThickness="5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" IsHitTestVisible="False"/>
+            <Path x:Name="IdleRing" Stroke="{StaticResource Accent2}" StrokeThickness="5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" IsHitTestVisible="False">
+              <Path.Effect><DropShadowEffect Color="#00E1FF" BlurRadius="18" ShadowDepth="0" Opacity="0.9"/></Path.Effect>
+            </Path>
             <!-- water temperature over the idle picture: centred in the top half of the circle (25 % from the top) -->
             <Grid Margin="8" IsHitTestVisible="False">
               <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
