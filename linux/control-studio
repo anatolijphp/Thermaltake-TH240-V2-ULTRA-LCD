@@ -1,0 +1,16 @@
+Package: ttlcd-studio
+Version: @VERSION@
+Architecture: all
+Maintainer: anatolijphp <anatolijphp@users.noreply.github.com>
+Depends: ttlcd (= @VERSION@), libgtk3.0-cil
+Recommends: libayatana-appindicator3-1
+Section: utils
+Priority: optional
+Homepage: https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD
+Description: TT LCD Studio window for the Thermaltake TH240 V2 Ultra (CL-W383) LCD
+ GTK window over the ttlcd package: dashboard, live preview, display modes
+ (image, GIF, colour, clock, off), device and settings pages, idle picture.
+ Needs libgtk3.0-cil (GTK# 3 for Mono), which Debian/Ubuntu dropped from
+ their archives (gone since Ubuntu 25.10; still packaged in 24.04). Where
+ it isn't installable, use the ttlcd command line and systemd service
+ instead (this package just won't install, ttlcd is unaffected).

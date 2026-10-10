@@ -2,8 +2,7 @@ Package: ttlcd
 Version: @VERSION@
 Architecture: all
 Maintainer: anatolijphp <anatolijphp@users.noreply.github.com>
-Depends: mono-runtime, libmono-system-drawing4.0-cil, libmono-system-xml4.0-cil, libmono-system-core4.0-cil, libmono-system-windows-forms4.0-cil, libmono-system-management4.0-cil, libmono-system-serviceprocess4.0-cil, libgdiplus, fonts-dejavu-core, libgtk3.0-cil
-Recommends: libayatana-appindicator3-1
+Depends: mono-runtime, libmono-system-drawing4.0-cil, libmono-system-xml4.0-cil, libmono-system-core4.0-cil, libmono-system-windows-forms4.0-cil, libmono-system-management4.0-cil, libmono-system-serviceprocess4.0-cil, libgdiplus, fonts-dejavu-core
 Section: utils
 Priority: optional
 Homepage: https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD
@@ -11,5 +10,5 @@ Description: Screen software for the Thermaltake TH240 V2 Ultra (CL-W383) LCD
  Drives the cooler's round 2.1" LCD without TT RGB Plus: a clock and sensor
  face (coolant temperature from the cooler, CPU temperature and load), an
  image, an animated GIF or a colour. Command-line tool (ttlcd) plus a systemd
- user service (systemctl --user enable --now ttlcd), and the TT LCD Studio
- window (ttlcd-studio).
+ user service (systemctl --user enable --now ttlcd). The GTK window
+ (ttlcd-studio) is the separate ttlcd-studio package.

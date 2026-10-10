@@ -100,9 +100,13 @@ TT LCD Studio runs on Ubuntu too, with the same look: a native GTK window over t
 <img src="docs/media/ubuntu-dashboard.png" alt="TT LCD Studio on Ubuntu: dashboard and live preview" width="860">
 
 ```
-sudo apt install ./ttlcd_1.2.0_all.deb    # from the release; pulls in Mono and GTK#
-ttlcd-studio                              # or "TT LCD Studio" in the app menu
+sudo apt install ./ttlcd_1.2.1_all.deb ./ttlcd-studio_1.2.1_all.deb   # from the release; pulls in Mono and GTK#
+ttlcd-studio                                                          # or "TT LCD Studio" in the app menu
 ```
+
+`ttlcd-studio` is a separate package because it needs `libgtk3.0-cil` (GTK# 3), which Debian dropped in 2023 and
+which some distributions no longer carry at all (gone from Ubuntu since 25.10; still in 24.04). Where it isn't
+installable, skip it and install just `ttlcd_1.2.1_all.deb` for the command line and service below.
 
 - **Everything Linux can do, in the window:**
   - dashboard
@@ -127,13 +131,16 @@ ttlcd config                              # all settings (~/.config/ttlcd/config
 ```
 
 Studio stops this service while its window is open, so the two never drive the cooler at the same time. Other
-distributions: unpack `ttlcd-<version>-linux.tar.gz` to `/` and install Mono, libgdiplus and GTK# 3.
+distributions: unpack `ttlcd-<version>-linux.tar.gz` to `/` and install Mono and libgdiplus (and GTK# 3 too, for
+the window, if that's available - see above).
 </details>
 
 ## Build from source
 
 **Windows:** `build.cmd` uses the .NET Framework 4.8 C# compiler that ships with it. No SDK,
-no NuGet. **Linux:** `./build.sh` with Mono and GTK# (`sudo apt install mono-devel libgtk3.0-cil-dev`); it compiles the same sources.
+no NuGet. **Linux:** `./build.sh` with Mono (`sudo apt install mono-devel`); it compiles the same sources. Add
+`libgtk3.0-cil-dev` too to also build `ttlcd-studio` - `build.sh` skips it and builds just `ttlcd` when that's
+missing, which is the case on distributions that dropped GTK# 3 (Ubuntu 25.10 and newer).
 
 ```
 git clone https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD.git
@@ -153,9 +160,10 @@ Sources and build output are kept apart. Everything built lands in `build\<os>\`
 
 | `build/linux/` | What |
 |---|---|
-| `ttlcd_<version>_all.deb` | Debian/Ubuntu package: `ttlcd-studio` (GTK window), `ttlcd`, udev rule, systemd user service, menu entry |
+| `ttlcd_<version>_all.deb` | Debian/Ubuntu package: `ttlcd` (CLI + service), udev rule, systemd user service |
+| `ttlcd-studio_<version>_all.deb` | Debian/Ubuntu package: `ttlcd-studio` (GTK window), menu entry. Needs `ttlcd` and `libgtk3.0-cil`; not built if that's unavailable |
 | `ttlcd-<version>-linux.tar.gz` | The same files for other distributions |
-| `pkg/` | The installed layout |
+| `pkg/`, `pkg-studio/` | The installed layouts |
 
 Every push runs [GitHub Actions](.github/workflows/build.yml) on Windows and Ubuntu: build, firmware checksum check, a
 silent install and uninstall smoke test, and an install of the `.deb` into a clean Ubuntu container that renders
