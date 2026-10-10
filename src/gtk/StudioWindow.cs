@@ -16,6 +16,7 @@ namespace TtLcd.GtkUi
         Label titleStatus, navSerial, connText, fpsText, modeText;
         DrawingArea connDot;
         RoundPreview preview;
+        Label previewTitle;
         IconButton gameBtn;
         long shownSeq = -1;
         double rgbShift;
@@ -79,12 +80,35 @@ namespace TtLcd.GtkUi
             var full = new IconButton("full", 46, 48, "Full screen") { IconSize = 12 };
             full.Clicked += () => { if ((Window.State & Gdk.WindowState.Maximized) != 0) Unmaximize(); else Maximize(); };
             var close = new IconButton("close", 46, 48, "Close") { IconSize = 12 };
-            close.Clicked += () => Quit();
+            close.Clicked += CloseRequested;
             foreach (var b in new Widget[] { gameBtn, min, full, close }) row.PackStart(b, false, false, 0);
             bar.Add(row);
             GLib.Timeout.Add(50, () => { rgbShift = (rgbShift + 1.0 / 120) % 1; bar.QueueDraw(); return true; }); // flowing RGB line (6 s)
             bar.Shift = () => rgbShift;
             return bar;
+        }
+
+        public bool HasTray;
+        string currentPage = "dashboard";
+
+        // The close button: to the tray (when there is one and the setting says so), otherwise exit.
+        public void CloseRequested()
+        {
+            if (HasTray && core.Config.CloseToTray)
+            {
+                Hide();
+                if (idleOn) core.Engine.Suspended = false;   // the Idle view only pauses streaming while it is visible
+            }
+            else Quit();
+        }
+
+        public void ShowWindow()
+        {
+            ShowAll();
+            Load();
+            ShowPage(currentPage);
+            if (idleOn) SetPreviewMode(true);
+            Present();
         }
 
         public void Quit()
@@ -135,6 +159,7 @@ namespace TtLcd.GtkUi
 
         public void ShowPage(string page)
         {
+            currentPage = page;
             foreach (var p in pages) p.Value.Visible = p.Key == page;
             foreach (var n in navs) n.Value.On = n.Key == page;
             if (page == "dashboard") UpdateDashboard();
@@ -277,18 +302,20 @@ namespace TtLcd.GtkUi
         Widget PreviewColumn()
         {
             var col = new Box(Orientation.Vertical, 0) { WidthRequest = 400 };
-            var title = new Label("LIVE PREVIEW") { Halign = Align.Start, MarginLeft = 10, MarginTop = 10 };
-            title.StyleContext.AddClass("caption");
-            col.PackStart(title, false, false, 0);
+            previewTitle = new Label("LIVE PREVIEW") { Halign = Align.Start, MarginLeft = 10, MarginTop = 10 };
+            previewTitle.StyleContext.AddClass("caption");
+            col.PackStart(previewTitle, false, false, 0);
             var inner = new Box(Orientation.Vertical, 0) { MarginLeft = 28, MarginRight = 28, MarginTop = 6 };
             var head = new Box(Orientation.Horizontal, 0);
-            var idle = new SwitchToggle("Idle") { TooltipText = "Show and change the picture the cooler displays by itself" };
-            head.PackStart(idle, false, false, 0);
+            idleSwitch = new SwitchToggle("Idle") { TooltipText = "Show and change the picture the cooler displays by itself" };
+            idleSwitch.Toggled += SetPreviewMode;
+            head.PackStart(idleSwitch, false, false, 0);
             var rotate = new IconButton("rotate", 30, 30, "Rotate 90° (saved; turns the live picture and the idle screen)") { Round = true, IconSize = 14 };
             rotate.Clicked += () => { int r = StudioModel.NextUserRotation(core.Config); core.Change(c => c.Rotation = StudioModel.RotationFor(c, r)); shownSeq = -1; };
             head.PackEnd(rotate, false, false, 0);
             inner.PackStart(head, false, false, 0);
             preview = new RoundPreview { Halign = Align.Center, MarginTop = 14 };
+            preview.Clicked += () => { core.Engine.Paused = !core.Engine.Paused; UpdateStatus(); };
             inner.PackStart(preview, false, false, 0);
 
             var card = new StatusCard { MarginTop = 24 };
@@ -308,6 +335,8 @@ namespace TtLcd.GtkUi
             cb.PackStart(row, false, false, 0); cb.PackStart(modeText, false, false, 0);
             card.Add(cb);
             inner.PackStart(card, false, false, 0);
+            liveCard = card;
+            inner.PackStart(BuildIdlePanel(), false, false, 0);
             col.PackStart(inner, false, false, 0);
             return new ColumnBorder(col);
         }
@@ -322,7 +351,9 @@ namespace TtLcd.GtkUi
 
         void UpdateStatus()
         {
-            model.CheckHwRotation();
+            if (model.CheckHwRotation() && idleOn && !idle.Editing) ShowStoredIdle();
+            UpdateIdleTemp();
+            preview.Paused = core.Engine.Paused;
             titleStatus.Text = model.TitleStatus;
             connText.Text = model.ConnText;
             fpsText.Text = model.FpsText;
@@ -345,6 +376,7 @@ namespace TtLcd.GtkUi
                 page = page.Substring(0, colon);
                 Load();
             }
+            if (page == "idle") { idle.TriedRead = true; idleSwitch.SetSilently(true); SetPreviewMode(true); page = "dashboard"; }
             var pick = Environment.GetEnvironmentVariable("TTLCD_SHOT_SELECT");
             if (!string.IsNullOrEmpty(pick) && pick.Contains(":"))
             {

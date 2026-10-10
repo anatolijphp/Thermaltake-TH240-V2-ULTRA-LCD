@@ -68,27 +68,68 @@ namespace TtLcd.GtkUi
     // turned like the LCD on this mount.
     class RoundPreview : DrawingArea
     {
-        Gdk.Pixbuf frame; double angle; double ringTurn;
+        Gdk.Pixbuf frame, idleFrame; double angle, idleAngle; double ringTurn;
+        public bool IdleMode, Paused, Hover, Editing;
+        public int Progress = -1;          // upload/read progress 0..100, -1 = none
+        public string TempText;            // coolant temperature over the idle picture, or null
+        public event System.Action Clicked;
+        public event Action<double, double> Panned;   // in LCD pixels
+        public event Action<int> Zoomed;              // +1 / -1
+        double lastX, lastY; bool dragging;
+
         public RoundPreview()
         {
             SetSizeRequest(344, 344);
             GLib.Timeout.Add(50, () => { ringTurn = (ringTurn + 360.0 / 160) % 360; QueueDraw(); return true; }); // 8 s per turn
+            Events |= Gdk.EventMask.ButtonPressMask | Gdk.EventMask.ButtonReleaseMask | Gdk.EventMask.PointerMotionMask
+                    | Gdk.EventMask.ScrollMask | Gdk.EventMask.EnterNotifyMask | Gdk.EventMask.LeaveNotifyMask;
+            EnterNotifyEvent += (o, a) => { Hover = true; QueueDraw(); };
+            LeaveNotifyEvent += (o, a) => { Hover = false; QueueDraw(); };
+            ButtonPressEvent += (o, a) =>
+            {
+                if (IdleMode && Editing) { dragging = true; lastX = a.Event.X; lastY = a.Event.Y; return; }
+                if (!IdleMode && Clicked != null) Clicked();
+            };
+            ButtonReleaseEvent += (o, a) => dragging = false;
+            MotionNotifyEvent += (o, a) =>
+            {
+                if (!dragging) return;
+                double k = Lcd.Width / 328.0;
+                if (Panned != null) Panned((a.Event.X - lastX) * k, (a.Event.Y - lastY) * k);
+                lastX = a.Event.X; lastY = a.Event.Y;
+            };
+            ScrollEvent += (o, a) =>
+            {
+                if (!IdleMode || !Editing || Zoomed == null) return;
+                if (a.Event.Direction == Gdk.ScrollDirection.Up) Zoomed(1);
+                else if (a.Event.Direction == Gdk.ScrollDirection.Down) Zoomed(-1);
+            };
+        }
+
+        static Gdk.Pixbuf Load(byte[] jpg)
+        {
+            if (jpg == null || jpg.Length == 0) return null;
+            try { using (var p = new Gdk.Pixbuf(jpg)) return p.ScaleSimple(328, 328, Gdk.InterpType.Bilinear); }
+            catch (Exception) { return null; }
         }
 
         public void SetFrame(byte[] jpg, double turn)
         {
-            try
-            {
-                var p = new Gdk.Pixbuf(jpg);
-                var old = frame;
-                frame = p.ScaleSimple(328, 328, Gdk.InterpType.Bilinear);
-                p.Dispose();
-                if (old != null) old.Dispose();
-            }
-            catch (Exception) { }
+            var p = Load(jpg);
+            if (p == null) return;
+            var old = frame; frame = p; if (old != null) old.Dispose();
             angle = turn;
             QueueDraw();
         }
+
+        public void SetIdle(byte[] jpg, double turn)
+        {
+            var old = idleFrame; idleFrame = Load(jpg); if (old != null) old.Dispose();
+            idleAngle = turn;
+            QueueDraw();
+        }
+
+        public bool HasIdle { get { return idleFrame != null; } }
 
         protected override bool OnDrawn(Context cr)
         {
@@ -102,16 +143,42 @@ namespace TtLcd.GtkUi
             // screen
             cr.NewPath(); cr.Arc(cx, cy, 164, 0, 2 * Math.PI);
             cr.SetSourceRGB(0, 0, 0); cr.FillPreserve();
-            if (frame != null)
+            var pic = IdleMode ? idleFrame : frame;
+            if (pic != null)
             {
                 cr.Save();
                 cr.Clip();
-                cr.Translate(cx, cy); cr.Rotate(angle * Math.PI / 180);
-                Gdk.CairoHelper.SetSourcePixbuf(cr, frame, -164, -164);
+                cr.Translate(cx, cy); cr.Rotate((IdleMode ? idleAngle : angle) * Math.PI / 180);
+                Gdk.CairoHelper.SetSourcePixbuf(cr, pic, -164, -164);
                 cr.Paint();
                 cr.Restore();
             }
             cr.NewPath();
+            if (IdleMode && pic == null) Theme.TextCentred(cr, "No idle image yet", Theme.FontName + " 10", Theme.Dim, cx, cy);
+            if (IdleMode && TempText != null)
+            {
+                // "33°C", centred in the top half of the circle, 5 % lower than the quarter line
+                Theme.TextCentred(cr, TempText, Theme.FontName + " 46", Theme.Hex(0xFFFFFF), cx, cy - 82 + 16);
+            }
+            if (IdleMode && Progress >= 0)
+            {
+                // read/upload progress from the top, clockwise
+                cr.NewPath();
+                if (Progress >= 100) cr.Arc(cx, cy, 168, 0, 2 * Math.PI);
+                else cr.Arc(cx, cy, 168, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Progress / 100.0);
+                cr.LineCap = LineCap.Round;
+                Theme.GlowStroke(cr, Theme.Accent2, 5, 12, 0.9);
+            }
+            if (!IdleMode && (Hover || Paused))
+            {
+                // YouTube-style pause/play in the middle
+                cr.NewPath(); cr.Arc(cx, cy, 38, 0, 2 * Math.PI);
+                cr.SetSourceRGBA(0, 0, 0, 0.6); cr.FillPreserve();
+                cr.SetSourceRGBA(1, 1, 1, 0.33); cr.LineWidth = 1; cr.Stroke();
+                cr.SetSourceRGB(1, 1, 1);
+                if (Paused) { cr.MoveTo(cx - 8, cy - 13); cr.LineTo(cx + 13, cy); cr.LineTo(cx - 8, cy + 13); cr.ClosePath(); cr.Fill(); }
+                else { cr.Rectangle(cx - 10, cy - 12, 7, 24); cr.Rectangle(cx + 3, cy - 12, 7, 24); cr.Fill(); }
+            }
             return true;
         }
     }
