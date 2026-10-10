@@ -200,7 +200,7 @@ namespace TtLcd.GtkUi
             var sub = new Label("Choose which gauges the dashboard shows.") { Halign = Align.Start, MarginBottom = 12 };
             sub.StyleContext.AddClass("sub");
             inner.PackStart(sub, false, false, 0);
-            var chips = new Box(Orientation.Horizontal, 8);
+            var chips = new Box(Orientation.Horizontal, 6);
             chips.PackStart(Chip("Coolant temperature", c => c.DashWater, (c, v) => c.DashWater = v), false, false, 0);
             chips.PackStart(Chip("CPU temperature", c => c.DashCpuTemp, (c, v) => c.DashCpuTemp = v), false, false, 0);
             chips.PackStart(Chip("CPU load", c => c.DashCpuLoad, (c, v) => c.DashCpuLoad = v), false, false, 0);

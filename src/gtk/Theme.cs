@@ -38,7 +38,7 @@ label { color: #EDEDED; }
 .navlabel.on { color: #EDEDED; }
 button.chip {
   background-image: none; background-color: #1B1B1D; color: #8F8F94; border: 1px solid #29292C; border-radius: 15px;
-  padding: 5px 14px 5px 11px; box-shadow: none; text-shadow: none; -gtk-icon-shadow: none; min-height: 0;
+  padding: 4px 12px 4px 9px; font-size: 12px; box-shadow: none; text-shadow: none; -gtk-icon-shadow: none; min-height: 0;
 }
 button.chip:hover { border-color: #46464B; }
 button.chip:checked { background-color: rgba(255,31,75,0.18); border-color: #FF1F4B; color: #EDEDED; box-shadow: 0 0 8px rgba(255,31,75,0.55); }
@@ -68,10 +68,10 @@ tooltip, tooltip * { background-color: #1B1B1D; color: #EDEDED; }
         // A soft glow for strokes (approximates WPF's DropShadowEffect): wider, fainter passes under the stroke.
         public static void GlowStroke(Context cr, Color c, double width, double blur, double opacity)
         {
-            for (int i = 4; i >= 1; i--)
+            for (int i = 8; i >= 1; i--)
             {
-                cr.LineWidth = width + blur * i / 2.0;
-                cr.SetSourceRGBA(c.R, c.G, c.B, opacity * 0.12);
+                cr.LineWidth = width + blur * i / 4.0;
+                cr.SetSourceRGBA(c.R, c.G, c.B, opacity * 0.045);
                 cr.StrokePreserve();
             }
             cr.LineWidth = width;

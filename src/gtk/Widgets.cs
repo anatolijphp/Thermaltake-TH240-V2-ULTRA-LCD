@@ -95,7 +95,7 @@ namespace TtLcd.GtkUi
             double cx = Allocation.Width / 2.0, cy = Allocation.Height / 2.0;
             // ring: rotating gradient, glow underneath
             cr.NewPath(); cr.Arc(cx, cy, 170, 0, 2 * Math.PI);
-            for (int i = 5; i >= 1; i--) { cr.LineWidth = 4 + i * 6; cr.SetSourceRGBA(1, 0.12, 0.29, 0.05); cr.StrokePreserve(); }
+            for (int i = 8; i >= 1; i--) { cr.LineWidth = 4 + i * 4; cr.SetSourceRGBA(1, 0.12, 0.29, 0.022); cr.StrokePreserve(); }
             double t = ringTurn * Math.PI / 180, dx = Math.Cos(t) * 172, dy = Math.Sin(t) * 172;
             var g = Theme.RainbowGradient(cx - dx, cy - dy, cx + dx, cy + dy, new[] { 0xFF1F4B, 0xFFE600, 0x00E1FF, 0x7A4BFF, 0xFF2BD6 });
             cr.SetSource(g); cr.LineWidth = 4; cr.Stroke(); g.Dispose();
