@@ -487,6 +487,13 @@ namespace TtLcd
         {
             current = lcd;
             HwRotation = -1; // re-read from the cooler on every connect
+            // Config.Rotation as of the moment we read the cooler's current stored rotation this connection.
+            // Only a later CHANGE to Rotation (the user/app asking for a new orientation) should push a write;
+            // merely finding that the device's stored value already disagrees with our calibration must not -
+            // it was very likely changed on purpose by something else (ttlcd rotate, a previous session, a
+            // remount) and silently overwriting it on every reconnect is exactly the "stomps the device's
+            // rotation" bug.
+            int rotationAtConnect = int.MinValue;
             var t = new Thread(() =>
             {
                 int sent = -1, sleepSent = -1;
@@ -504,9 +511,16 @@ namespace TtLcd
                         // queries time out while the cooler is still waking up; keep trying instead of giving up
                         if (!gotSerial) try { Serial = lcd.Serial(); gotSerial = true; } catch (Exception) { }
                         // the cooler's stored rotation (turns its own idle/boot screens, not streamed frames)
-                        if (HwRotation < 0) try { HwRotation = lcd.Rotation(); } catch (Exception) { }
+                        if (HwRotation < 0)
+                            try { HwRotation = lcd.Rotation(); rotationAtConnect = cfg.Rotation; } catch (Exception) { }
                         int hw = HwFor(cfg);
-                        if (hw >= 0 && HwRotation >= 0 && hw != HwRotation) { lcd.SetRotation(hw); HwRotation = hw; } // flash write: only on change
+                        // flash write: only when Rotation changed since we connected, not merely on mismatch
+                        if (hw >= 0 && HwRotation >= 0 && cfg.Rotation != rotationAtConnect && hw != HwRotation)
+                        {
+                            lcd.SetRotation(hw);
+                            HwRotation = hw;
+                            rotationAtConnect = cfg.Rotation;
+                        }
                         // water temperature every 2 s, or at the game-mode interval while a game runs
                         if (tsw.ElapsedMilliseconds - lastTemp >= (Gaming ? Math.Max(2000, cfg.GameSensorMs) : 2000))
                         {

@@ -6,6 +6,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace TtLcd
 {
@@ -28,12 +29,7 @@ namespace TtLcd
                 float sw = src.Width * scale, sh = src.Height * scale;
                 g.DrawImage(src, (w - sw) / 2f, (h - sh) / 2f, sw, sh);
             }
-            switch (rotate)
-            {
-                case 90: bmp.RotateFlip(RotateFlipType.Rotate90FlipNone); break;
-                case 180: bmp.RotateFlip(RotateFlipType.Rotate180FlipNone); break;
-                case 270: bmp.RotateFlip(RotateFlipType.Rotate270FlipNone); break;
-            }
+            Rotate(bmp, rotate);
             return bmp;
         }
 
@@ -57,13 +53,41 @@ namespace TtLcd
             return bmp;
         }
 
+        // Rotates in place. Only correct for a square bitmap (true for every caller here - the panel is
+        // 480x480); a non-square image would need its Width/Height swapped for 90/270, which an existing
+        // Bitmap object can't do.
         public static void Rotate(Bitmap bmp, int degrees)
         {
-            switch (((degrees % 360) + 360) % 360)
+            int turns = (((degrees % 360) + 360) % 360) / 90;
+            if (turns == 0) return;
+            int w = bmp.Width, h = bmp.Height;
+            // Bitmap.RotateFlip calls into libgdiplus's native GdipImageRotateFlip, which aborts the process
+            // (SIGABRT) on some Linux builds (seen on Ubuntu 26.04's libgdiplus 6.1 - every rotated frame
+            // crashed the render thread). Rotate via Graphics/DrawImage instead, the same safe path used
+            // throughout this file, into a temporary bitmap, then copy its pixels back into the caller's.
+            using (var rotated = new Bitmap(w, h, PixelFormat.Format24bppRgb))
             {
-                case 90: bmp.RotateFlip(RotateFlipType.Rotate90FlipNone); break;
-                case 180: bmp.RotateFlip(RotateFlipType.Rotate180FlipNone); break;
-                case 270: bmp.RotateFlip(RotateFlipType.Rotate270FlipNone); break;
+                using (var g = Graphics.FromImage(rotated))
+                {
+                    g.TranslateTransform(w / 2f, h / 2f);
+                    g.RotateTransform(turns * 90f);
+                    g.TranslateTransform(-w / 2f, -h / 2f);
+                    g.DrawImage(bmp, 0, 0, w, h);
+                }
+                var src = rotated.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+                var dst = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+                try
+                {
+                    int bytes = src.Stride * h;
+                    var buf = new byte[bytes];
+                    Marshal.Copy(src.Scan0, buf, 0, bytes);
+                    Marshal.Copy(buf, 0, dst.Scan0, bytes);
+                }
+                finally
+                {
+                    rotated.UnlockBits(src);
+                    bmp.UnlockBits(dst);
+                }
             }
         }
 
