@@ -393,10 +393,18 @@ namespace TtLcd
                 int n = g.GetFrameCount(dim);
                 byte[] delays = null;
                 try { delays = g.GetPropertyItem(0x5100).Value; } catch (ArgumentException) { }
+                // On Linux, libgdiplus's PropertyTagFrameDelay only ever holds frame 0's delay (4 bytes, one
+                // int32) - re-querying after SelectActiveFrame(i) for any i still returns frame 0's value, so
+                // there is no way to read genuinely per-frame delays here. Almost all GIFs use one uniform
+                // delay across every frame anyway, so use frame 0's (correctly read) value for any frame the
+                // array doesn't cover, instead of an arbitrary fixed fallback - this is what made every frame
+                // but the first play at a hardcoded 100ms (10fps) regardless of the GIF's real pacing.
+                int uniform = delays != null && delays.Length >= 4 ? BitConverter.ToInt32(delays, 0) * 10 : 100;
+                if (uniform < 20) uniform = 100;
                 for (int i = 0; i < n; i++)
                 {
                     g.SelectActiveFrame(dim, i);
-                    int d = delays != null && delays.Length >= (i + 1) * 4 ? BitConverter.ToInt32(delays, i * 4) * 10 : 100;
+                    int d = delays != null && delays.Length >= (i + 1) * 4 ? BitConverter.ToInt32(delays, i * 4) * 10 : uniform;
                     if (d < 20) d = 100;
                     gif.Add(new KeyValuePair<Bitmap, int>(Render.Compose(g, Lcd.Width, Lcd.Height, c.FitContain, Rgb(c.ColorRgb)), d));
                 }
