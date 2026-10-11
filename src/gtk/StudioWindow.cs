@@ -124,7 +124,7 @@ namespace TtLcd.GtkUi
             var col = new Box(Orientation.Vertical, 0);
             var top = new Box(Orientation.Vertical, 0) { MarginTop = 10 };
             var toggle = new IconButton("menu", 40, 40, "Collapse menu") { IconSize = 16, Halign = Align.Start, MarginLeft = 13, MarginBottom = 8 };
-            toggle.Clicked += () => { core.Change(c => c.NavCollapsed = !c.NavCollapsed); ApplyNav(panel); };
+            toggle.Clicked += () => { core.Change(c => c.NavCollapsed = !c.NavCollapsed); ApplyNav(panel, true); };
             top.PackStart(toggle, false, false, 0);
             foreach (var n in new[] { new[] { "dashboard", "Dashboard" }, new[] { "modes", "Display modes" }, new[] { "device", "Device" }, new[] { "settings", "Settings" } })
             {
@@ -149,10 +149,12 @@ namespace TtLcd.GtkUi
             return panel;
         }
 
-        void ApplyNav(NavPanel panel)
+        // animate=false for the initial layout (no slide-in on window open), true for the toggle click.
+        void ApplyNav(NavPanel panel, bool animate = false)
         {
             bool c = core.Config.NavCollapsed;
-            panel.WidthRequest = c ? 66 : 214;
+            int target = c ? 66 : 214;
+            if (animate) panel.AnimateWidth(target); else panel.WidthRequest = target;
             foreach (var n in navs.Values) n.SetCollapsed(c);
             if (panel.Footer != null) panel.Footer.Visible = !c;
         }
@@ -481,7 +483,26 @@ namespace TtLcd.GtkUi
     class NavPanel : EventBox
     {
         public Widget Footer;
+        uint widthAnim;
         public NavPanel(Window win) { VisibleWindow = false; AppPaintable = true; ButtonPressEvent += (o, a) => ResizeEdge.TryBegin(win, this, a.Event); }
+
+        // Slides the collapse/expand the same way SwitchToggle/SegToggle animate elsewhere in this file
+        // (200ms cubic ease) - WidthRequest snapped straight to the target had no transition at all.
+        public void AnimateWidth(int target)
+        {
+            if (widthAnim != 0) GLib.Source.Remove(widthAnim);
+            int from = WidthRequest;
+            if (from == target) return;
+            var start = DateTime.UtcNow;
+            widthAnim = GLib.Timeout.Add(15, () =>
+            {
+                double k = Math.Min(1, (DateTime.UtcNow - start).TotalMilliseconds / 200);
+                double e = k < 0.5 ? 4 * k * k * k : 1 - Math.Pow(-2 * k + 2, 3) / 2;
+                WidthRequest = (int)Math.Round(from + (target - from) * e);
+                if (k >= 1) { widthAnim = 0; return false; }
+                return true;
+            });
+        }
         protected override bool OnDrawn(Context cr)
         {
             Theme.Set(cr, Theme.Panel); cr.Rectangle(0, 0, Allocation.Width, Allocation.Height); cr.Fill();
