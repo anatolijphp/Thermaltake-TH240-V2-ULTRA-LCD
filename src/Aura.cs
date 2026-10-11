@@ -39,6 +39,20 @@ namespace TtLcd
             return string.IsNullOrEmpty(run) ? null : Path.Combine(run, "armory-crate/virtual/ttlcd.ttas");
         }
 
+        // Linux: is armory-crated installed? Its installer puts the user unit in ~/.config/systemd/user; a packaged
+        // install would use the system user-unit folders. A published TTAS file proves it too.
+        public static bool LinuxServiceInstalled()
+        {
+            string path = LinuxPath();
+            if (path != null && File.Exists(path)) return true;
+            string cfg = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+            if (string.IsNullOrEmpty(cfg)) cfg = Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? "", ".config");
+            foreach (var dir in new[] { Path.Combine(cfg, "systemd/user"), "/etc/systemd/user", "/usr/local/lib/systemd/user",
+                                        "/usr/lib/systemd/user", "/lib/systemd/user" })
+                if (File.Exists(Path.Combine(dir, "armory-crated.service"))) return true;
+            return false;
+        }
+
         static byte[] ReadBlock(string path)
         {
             // A fresh unbuffered open each time: re-reading through one FileStream could be served from its buffer.

@@ -80,6 +80,8 @@ namespace TtLcd.GtkUi
                 grid.Attach(t, i % 3, i / 3, 1, 1);
             }
             loaders.Add(() => { foreach (var t in tiles) t.Value.On = t.Key == core.Config.Mode; });
+            loaders.Add(RefreshAura);
+            GLib.Timeout.Add(3000, () => { RefreshAura(); return true; });   // picks up armory-crate installed meanwhile
             page.PackStart(grid, false, false, 0);
 
             var card = new CardBox { MarginTop = 6 };
@@ -256,6 +258,21 @@ namespace TtLcd.GtkUi
                 styleLoading = false;
             }
             SetPanels();
+        }
+
+        // Aura needs armory-crated on Linux: until it is installed the tile is greyed out and can't be chosen.
+        // A config already set to Aura keeps it (the screen then says it's waiting for armory-crated).
+        bool? auraReady;
+        void RefreshAura()
+        {
+            Tile t;
+            if (!tiles.TryGetValue(Mode.Aura, out t)) return;
+            bool ready = AuraState.LinuxServiceInstalled();
+            if (auraReady == ready) return;
+            auraReady = ready;
+            t.Enabled = ready;
+            t.TooltipText = ready ? null : "Needs armory-crate (the Linux Aura Sync service). Install it and enable armory-crated";
+            if (core.Config.Mode == Mode.Aura && optDesc != null) optDesc.Text = StudioModel.ModeDescription(Mode.Aura);
         }
 
         void ShowOptions()

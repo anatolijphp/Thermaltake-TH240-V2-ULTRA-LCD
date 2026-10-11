@@ -177,6 +177,9 @@ Water temperature is then polled at `GameSensorMs`. The CPU-temp helper reads it
   - Its writer uses a seqlock (odd seq = mid-write) and sends finished frames as effect 0 ("Manual").
   - Each read opens the file fresh, twice, unbuffered. A block that is torn, odd or closed (magic 0) returns null,
     which shows "Waiting for armory-crated".
+  - `AuraState.LinuxServiceInstalled()` (the `armory-crated.service` user unit or the TTAS file exists) greys out
+    the Aura tile and tray item until armory-crate is installed. It is rechecked every 3 s. A config already set to
+    Aura keeps it. `ttlcd set Mode Aura` only prints a note.
   - Verified end to end against the LCD itself (2026-10-11): `armory-crated` running with `virtual:ttlcd` enabled,
     TTAS block inspected directly (seq even and climbing, magic correct, 8 live colours), then `ttlcd run` with
     Mode=Aura reported `Aura Sync · Manual · 30 fps` and the visualiser rendered the breathing effect's colour on

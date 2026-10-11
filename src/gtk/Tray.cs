@@ -39,7 +39,7 @@ namespace TtLcd.GtkUi
             menu.Append(new SeparatorMenuItem());
             var modeItem = new MenuItem("Mode");
             var modes = new Menu();
-            RadioMenuItem first = null;
+            RadioMenuItem first = null, aura = null;
             foreach (Mode m in Enum.GetValues(typeof(Mode)))
             {
                 if (!Os.Supports(m)) continue;
@@ -48,8 +48,10 @@ namespace TtLcd.GtkUi
                 if (first == null) first = item;
                 item.Active = core.Config.Mode == m;
                 item.Toggled += (o, a) => { if (item.Active && core.Config.Mode != mm) { core.Change(c => c.Mode = mm); win.Load(); } };
+                if (m == Mode.Aura) aura = item;
                 modes.Append(item);
             }
+            if (aura != null) aura.Sensitive = aura.Active || AuraState.LinuxServiceInstalled();
             modeItem.Submenu = modes;
             menu.Append(modeItem);
             var pause = new CheckMenuItem("Pause");
@@ -68,6 +70,8 @@ namespace TtLcd.GtkUi
             {
                 if (pause.Active != core.Engine.Paused) pause.Active = core.Engine.Paused;
                 if (game.Active != core.Engine.ForceGame) game.Active = core.Engine.ForceGame;
+                // Aura needs armory-crated (see Pages.RefreshAura); keep it choosable while it is the current mode
+                if (aura != null) aura.Sensitive = aura.Active || AuraState.LinuxServiceInstalled();
                 return true;
             });
             app_indicator_set_menu(indicator, menu.Handle);

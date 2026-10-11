@@ -177,6 +177,8 @@ namespace TtLcd
             f.SetValue(c, v);
             c.Save();
             Console.WriteLine("{0} = {1}", f.Name, v);
+            if (Os.Linux && v is Mode && (Mode)v == Mode.Aura && !AuraState.LinuxServiceInstalled())
+                Console.WriteLine("Note: armory-crate (armory-crated) isn't installed; the screen waits for it until it is.");
             return 0;
         }
 

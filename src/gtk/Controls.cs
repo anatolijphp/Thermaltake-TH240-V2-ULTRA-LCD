@@ -148,7 +148,7 @@ namespace TtLcd.GtkUi
     // RGB line along the bottom.
     class Tile : EventBox
     {
-        readonly string text, icon; bool on, hover;
+        readonly string text, icon; bool on, hover, enabled = true;
         public event System.Action Clicked;
         public Tile(string text, string icon)
         {
@@ -158,10 +158,12 @@ namespace TtLcd.GtkUi
             Events |= Gdk.EventMask.EnterNotifyMask | Gdk.EventMask.LeaveNotifyMask;
             EnterNotifyEvent += (o, a) => { hover = true; QueueDraw(); };
             LeaveNotifyEvent += (o, a) => { hover = false; QueueDraw(); };
-            ButtonPressEvent += (o, a) => { if (Clicked != null) Clicked(); };
+            ButtonPressEvent += (o, a) => { if (enabled && Clicked != null) Clicked(); };
         }
 
         public bool On { get { return on; } set { on = value; QueueDraw(); } }
+        // A disabled tile is greyed out and ignores clicks (its tooltip says why).
+        public bool Enabled { get { return enabled; } set { if (enabled != value) { enabled = value; QueueDraw(); } } }
 
         protected override bool OnDrawn(Context cr)
         {
@@ -180,11 +182,14 @@ namespace TtLcd.GtkUi
             }
             else
             {
-                Theme.Set(cr, hover ? Theme.CardHi : Theme.Card); cr.FillPreserve();
-                Theme.Set(cr, hover ? Theme.LineHi : Theme.Line); cr.LineWidth = 1; cr.Stroke();
+                bool hi = hover && enabled;
+                Theme.Set(cr, hi ? Theme.CardHi : Theme.Card); cr.FillPreserve();
+                Theme.Set(cr, hi ? Theme.LineHi : Theme.Line); cr.LineWidth = 1; cr.Stroke();
             }
+            if (!enabled) cr.PushGroup();
             Icons.Draw(cr, icon, w / 2 - 14, 22, 28, on ? Theme.Accent : Theme.Dim);
             Theme.TextCentred(cr, text, Theme.FontName + " 9.5", on ? Theme.Text : Theme.Dim, w / 2, 68);
+            if (!enabled) { cr.PopGroupToSource(); cr.PaintWithAlpha(0.35); }
             return true;
         }
     }
