@@ -101,9 +101,9 @@ namespace TtLcd.GtkUi
                 var r = new ResizeHandle(this, edge, false);
                 handles.Add(r); g.Attach(r, x, y, 1, 1); return r;
             };
-            h(Gdk.WindowEdge.NorthWest, 0, 0); h(Gdk.WindowEdge.North, 1, 0).Hexpand = true; h(Gdk.WindowEdge.NorthEast, 2, 0);
-            h(Gdk.WindowEdge.West, 0, 1).Vexpand = true; g.Attach(content, 1, 1, 1, 1); h(Gdk.WindowEdge.East, 2, 1).Vexpand = true;
-            h(Gdk.WindowEdge.SouthWest, 0, 2); h(Gdk.WindowEdge.South, 1, 2).Hexpand = true; h(Gdk.WindowEdge.SouthEast, 2, 2);
+            // no strip above the title bar: its own top edge resizes (TitleBarArea), so the bar stays flush with the top
+            h(Gdk.WindowEdge.West, 0, 0).Vexpand = true; g.Attach(content, 1, 0, 1, 1); h(Gdk.WindowEdge.East, 2, 0).Vexpand = true;
+            h(Gdk.WindowEdge.SouthWest, 0, 1); h(Gdk.WindowEdge.South, 1, 1).Hexpand = true; h(Gdk.WindowEdge.SouthEast, 2, 1);
             WindowStateEvent += (o, a) => UpdateResizeFrame();
             return g;
         }
@@ -443,7 +443,8 @@ namespace TtLcd.GtkUi
         static extern IntPtr gdk_pixbuf_get_from_window(IntPtr window, int x, int y, int width, int height);
     }
 
-    // One resize handle: an edge or corner of the frame around the window (a 5 px strip with the matching cursor),
+    // One resize handle: an edge or corner of the frame around the window (a 5 px strip with the matching cursor; the
+    // top edge is the title bar's own, see TitleBarArea),
     // or, with grip, the striped corner grip in the bottom-right corner that turns red on hover.
     class ResizeHandle : DrawingArea
     {
@@ -457,8 +458,12 @@ namespace TtLcd.GtkUi
             else SetSizeRequest(Size, Size);
             Events |= Gdk.EventMask.ButtonPressMask | Gdk.EventMask.EnterNotifyMask | Gdk.EventMask.LeaveNotifyMask;
             Realized += (o, a) => Window.Cursor = new Gdk.Cursor(Display, CursorFor(edge));
-            EnterNotifyEvent += (o, a) => { hover = true; QueueDraw(); };
-            LeaveNotifyEvent += (o, a) => { hover = false; QueueDraw(); };
+            // only the grip lights up on hover; the edges just change the cursor
+            if (grip)
+            {
+                EnterNotifyEvent += (o, a) => { hover = true; QueueDraw(); };
+                LeaveNotifyEvent += (o, a) => { hover = false; QueueDraw(); };
+            }
             ButtonPressEvent += (o, a) =>
             {
                 if (a.Event.Button != 1 || win.Window == null) return;
@@ -466,7 +471,7 @@ namespace TtLcd.GtkUi
             };
         }
 
-        static Gdk.CursorType CursorFor(Gdk.WindowEdge e)
+        public static Gdk.CursorType CursorFor(Gdk.WindowEdge e)
         {
             switch (e)
             {
@@ -496,9 +501,9 @@ namespace TtLcd.GtkUi
                 cr.Stroke();
                 return true;
             }
-            // the frame: dark, with a hairline on the window's outer side (red while the pointer is on it)
+            // the frame: dark, with a hairline on the window's outer side (the cursor shows it can be dragged)
             Theme.Set(cr, Theme.TitleBg); cr.Rectangle(0, 0, w, h); cr.Fill();
-            Theme.Set(cr, hover ? Theme.Accent : Theme.Line);
+            Theme.Set(cr, Theme.Line);
             string n = edge.ToString();
             if (n.StartsWith("North")) { cr.Rectangle(0, 0, w, 1); cr.Fill(); }
             if (n.StartsWith("South")) { cr.Rectangle(0, h - 1, w, 1); cr.Fill(); }
@@ -513,15 +518,41 @@ namespace TtLcd.GtkUi
     {
         readonly Window win;
         public Func<double> Shift = () => 0;
+        // The top TopEdge px resize the window (diagonally within Corner px of either end) instead of moving it.
+        const int TopEdge = 4, Corner = 12;
+        Gdk.Cursor edgeCursor;
+        Gdk.WindowEdge? edgeShown;
+
         public TitleBarArea(Window w)
         {
             win = w; VisibleWindow = false; AppPaintable = true;
+            Events |= Gdk.EventMask.PointerMotionMask | Gdk.EventMask.LeaveNotifyMask;
+            MotionNotifyEvent += (o, a) => ShowEdge(EdgeAt(a.Event.X, a.Event.Y));
+            LeaveNotifyEvent += (o, a) => ShowEdge(null);
             ButtonPressEvent += (o, a) =>
             {
                 if (a.Event.Button != 1) return;
+                var edge = EdgeAt(a.Event.X, a.Event.Y);
+                if (edge != null) { win.BeginResizeDrag(edge.Value, (int)a.Event.Button, (int)a.Event.XRoot, (int)a.Event.YRoot, a.Event.Time); return; }
                 if (a.Event.Type == Gdk.EventType.TwoButtonPress) { if ((win.Window.State & Gdk.WindowState.Maximized) != 0) win.Unmaximize(); else win.Maximize(); return; }
                 win.BeginMoveDrag((int)a.Event.Button, (int)a.Event.XRoot, (int)a.Event.YRoot, a.Event.Time);
             };
+        }
+
+        Gdk.WindowEdge? EdgeAt(double x, double y)
+        {
+            if (y > TopEdge || win.Window == null) return null;
+            if ((win.Window.State & (Gdk.WindowState.Maximized | Gdk.WindowState.Fullscreen)) != 0) return null;
+            return x < Corner ? Gdk.WindowEdge.NorthWest : x > Allocation.Width - Corner ? Gdk.WindowEdge.NorthEast : Gdk.WindowEdge.North;
+        }
+
+        // the bar has no window of its own, so the cursor is set on the toplevel's while the pointer is on the edge
+        void ShowEdge(Gdk.WindowEdge? edge)
+        {
+            if (edge == edgeShown || win.Window == null) return;
+            edgeShown = edge;
+            edgeCursor = edge == null ? null : new Gdk.Cursor(Display, ResizeHandle.CursorFor(edge.Value));
+            win.Window.Cursor = edgeCursor;
         }
 
         protected override bool OnDrawn(Context cr)
