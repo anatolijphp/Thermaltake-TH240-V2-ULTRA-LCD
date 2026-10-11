@@ -130,6 +130,10 @@ namespace TtLcd
             setup();
 
             int width = (int)Math.Round(w.ActualWidth * scale), height = (int)Math.Round(w.ActualHeight * scale);
+            // WPF's quantiser for the gradients and pictures (GifWriter's own median cut is the Mono fallback)
+            GifWriter.Quantiser = (sub, count, max) =>
+                new BitmapPalette(BitmapSource.Create(count, 1, 96, 96, PixelFormats.Bgr32, null, sub, count * 4), max).Colors
+                    .Select(c => c.R << 16 | c.G << 8 | c.B);
             var gif = new GifWriter(width, height);
             var arrow = Geometry.Parse("M0,0 L0,18 L4.6,13.8 L7.6,20.6 L10.6,19.4 L7.6,12.6 L13.4,12.6 Z");
             var clicks = new List<KeyValuePair<long, Point>>();

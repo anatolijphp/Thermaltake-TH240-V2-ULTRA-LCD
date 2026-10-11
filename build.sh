@@ -95,7 +95,7 @@ cp "$GTKSHARP_CACHE"/flat/*.dll "$GTKSHARP_CACHE"/flat/*.dll.config "$GTKSHARP_C
 echo "[4/5] TTLcdStudio.exe, ttlcd-studio_${VER}_all.deb"
 mcs -nologo -optimize+ -unsafe -target:exe -main:TtLcd.GtkUi.GtkProgram -out:"$LIBS/TTLcdStudio.exe" $REFS \
     -r:"$LIBS/cairo-sharp.dll" -r:"$LIBS/pango-sharp.dll" -r:"$LIBS/atk-sharp.dll" -r:"$LIBS/gtk-sharp.dll" \
-    -r:"$LIBS/gio-sharp.dll" -r:"$LIBS/gdk-sharp.dll" -r:"$LIBS/glib-sharp.dll" $CORE $STUDIO src/gtk/*.cs
+    -r:"$LIBS/gio-sharp.dll" -r:"$LIBS/gdk-sharp.dll" -r:"$LIBS/glib-sharp.dll" $CORE $STUDIO src/Gif.cs src/gtk/*.cs
 
 install -m 755 linux/ttlcd-studio "$PKGS/usr/bin/ttlcd-studio"
 install -m 644 linux/ttlcd-studio.desktop "$PKGS/usr/share/applications/ttlcd-studio.desktop"

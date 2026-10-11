@@ -185,6 +185,10 @@ Water temperature is then polled at `GameSensorMs`. The CPU-temp helper reads it
     Mode=Aura reported `Aura Sync · Manual · 30 fps` and the visualiser rendered the breathing effect's colour on
     the real cooler screen. Also checked restarting `armory-crated` while `ttlcd run` is live - it recovers on its
     own, no restart needed on the ttlcd side.
+- `TTLcdStudio.exe --record <gif> tour [scale]` (`src/gtk/Record.cs`) records the README's `docs/media/ubuntu.gif`
+  in the real window (shown on screen; frames read from X) through the shared `src/Gif.cs`. `Gif.cs` has no WPF:
+  its palette is a median cut unless `GifWriter.Quantiser` is set (the WPF recorder sets WPF's). Run it with
+  `XDG_CONFIG_HOME` on a config copy (the tour changes the mode). It drives the cooler while it runs.
 - `src/LinuxHid.cs`: `Os.Linux`, `Os.Supports(mode)` (Image, Gif, Color, Clock, Aura, Off), hidraw enumeration through
   `/sys/class/hidraw/*/device/uevent` (HID_ID, HID_PHYS ".../inputN" = interface). hidraw reads return the report
   without the report-ID byte; `Lcd.ReadCtrl` shifts it. Mono named mutexes are per process only.

@@ -1,12 +1,11 @@
-// Animated GIF writer (dev aid for the README media; used by TTLcdStudio --record).
-// Each frame stores only the rectangle that changed since the previous one, with its own palette (WPF's quantiser),
-// nearest-colour mapping without dithering (so unchanged areas compress well), and the standard GIF LZW coder.
+// Animated GIF writer (dev aid for the README media; used by TTLcdStudio --record on Windows and Linux).
+// Each frame stores only the rectangle that changed since the previous one, with its own palette, nearest-colour
+// mapping without dithering (so unchanged areas compress well), and the standard GIF LZW coder.
+// No WPF here, so Mono builds it too: the palette uses a median cut, or Quantiser when one is set (WPF's on Windows).
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 namespace TtLcd
 {
@@ -17,6 +16,9 @@ namespace TtLcd
         readonly int w, h;
 
         public GifWriter(int width, int height) { w = width; h = height; }
+
+        // (Bgr32 pixels, pixel count, max colours) -> up to max colours as 0xRRGGBB; null = the median cut below
+        public static Func<byte[], int, int, IEnumerable<int>> Quantiser = null;
 
         // px: Bgra32/Pbgra32 (opaque), w*h*4 bytes
         public void Add(byte[] px, int delayCs)
@@ -92,8 +94,8 @@ namespace TtLcd
                 }
             var sample = changed.ToArray();
             int first = partial ? 1 : 0;                                            // index 0 = transparent
-            var pal = Palette(sample, Math.Max(1, sample.Length / 4), 1, 256 - first);
-            int n = pal.Colors.Count + first, bits = 1;
+            var pal = Palette(sample, Math.Max(1, sample.Length / 4), 256 - first);
+            int n = pal.Count + first, bits = 1;
             while ((1 << bits) < n) bits++;
 
             // nearest palette colour, cached per 15-bit colour
@@ -111,17 +113,17 @@ namespace TtLcd
                     if (cache[key] < 0)
                     {
                         int best = 0, bd = int.MaxValue;
-                        for (int j = 0; j < pal.Colors.Count; j++)
+                        for (int j = 0; j < pal.Count; j++)
                         {
-                            var c = pal.Colors[j];
-                            int dr = c.R - r, dg = c.G - g, db = c.B - b, d = dr * dr * 3 + dg * dg * 4 + db * db * 2;
+                            int c = pal[j];
+                            int dr = (c >> 16 & 255) - r, dg = (c >> 8 & 255) - g, db = (c & 255) - b, d = dr * dr * 3 + dg * dg * 4 + db * db * 2;
                             if (d < bd) { bd = d; best = j; }
                         }
                         cache[key] = (short)(best + first);
                     }
                     ix[i] = (byte)cache[key];
-                    var sc = pal.Colors[cache[key] - first];
-                    shown[k] = sc.B; shown[k + 1] = sc.G; shown[k + 2] = sc.R;
+                    int sc = pal[cache[key] - first];
+                    shown[k] = (byte)sc; shown[k + 1] = (byte)(sc >> 8); shown[k + 2] = (byte)(sc >> 16);
                 }
 
             o.Write(new byte[] { 0x21, 0xF9, 4, (byte)(0x04 | first) /* keep previous; transparent index */ }, 0, 4);
@@ -130,36 +132,73 @@ namespace TtLcd
             o.WriteByte((byte)(0x80 | (bits - 1)));                                    // local colour table
             for (int i = 0; i < (1 << bits); i++)
             {
-                Color c = i >= first && i - first < pal.Colors.Count ? pal.Colors[i - first] : Colors.Black;
-                o.WriteByte(c.R); o.WriteByte(c.G); o.WriteByte(c.B);
+                int c = i >= first && i - first < pal.Count ? pal[i - first] : 0;
+                o.WriteByte((byte)(c >> 16)); o.WriteByte((byte)(c >> 8)); o.WriteByte((byte)c);
             }
             Lzw(o, ix, Math.Max(2, bits));
         }
         // The most frequent exact colours first (flat UI surfaces then match the frames around them exactly, so a partial
-        // frame leaves no visible seams), the rest from WPF's quantiser for gradients and pictures.
-        static BitmapPalette Palette(byte[] sub, int fw, int fh, int max)
+        // frame leaves no visible seams), the rest from the quantiser for gradients and pictures. Colours are 0xRRGGBB.
+        static List<int> Palette(byte[] sub, int count, int max)
         {
-            var count = new Dictionary<int, int>();
+            var freq = new Dictionary<int, int>();
             for (int i = 0; i < sub.Length; i += 4)
             {
                 int c = sub[i] | (sub[i + 1] << 8) | (sub[i + 2] << 16), k;
-                count.TryGetValue(c, out k);
-                count[c] = k + 1;
+                freq.TryGetValue(c, out k);
+                freq[c] = k + 1;
             }
-            var colors = new List<Color>();
+            var colors = new List<int>();
             var seen = new HashSet<int>();
-            foreach (var kv in count.OrderByDescending(x => x.Value).Take(count.Count <= max ? max : max / 2))
+            foreach (var kv in freq.OrderByDescending(x => x.Value).Take(freq.Count <= max ? max : max / 2))
             {
-                colors.Add(Color.FromRgb((byte)(kv.Key >> 16), (byte)(kv.Key >> 8), (byte)kv.Key));
+                colors.Add(kv.Key);
                 seen.Add(kv.Key);
             }
-            if (count.Count > max)
-                foreach (var c in new BitmapPalette(BitmapSource.Create(fw, fh, 96, 96, PixelFormats.Bgr32, null, sub, fw * 4), 256).Colors)
+            if (freq.Count > max)
+                foreach (var c in (Quantiser ?? MedianCut)(sub, count, 256))
                 {
                     if (colors.Count >= max) break;
-                    if (seen.Add(c.B | (c.G << 8) | (c.R << 16))) colors.Add(c);
+                    if (seen.Add(c)) colors.Add(c);
                 }
-            return new BitmapPalette(colors);
+            return colors;
+        }
+
+        // Median cut: split the box with the widest channel range at its median until there are max boxes, then take
+        // each box's average. Samples at most 64K pixels.
+        static IEnumerable<int> MedianCut(byte[] sub, int count, int max)
+        {
+            int step = Math.Max(1, count / 65536);
+            var px = new List<int>();
+            for (int i = 0; i < count; i += step) px.Add(sub[i * 4] | (sub[i * 4 + 1] << 8) | (sub[i * 4 + 2] << 16));
+            var boxes = new List<List<int>> { px };
+            Func<List<int>, int, int> range = (b, sh) => { int lo = 255, hi = 0; foreach (int c in b) { int v = c >> sh & 255; if (v < lo) lo = v; if (v > hi) hi = v; } return hi - lo; };
+            while (boxes.Count < max)
+            {
+                List<int> big = null; int bestR = 0, bestSh = 0;
+                foreach (var b in boxes)
+                {
+                    if (b.Count < 2) continue;
+                    foreach (int sh in new[] { 16, 8, 0 })
+                    {
+                        int r = range(b, sh);
+                        if (r > bestR) { bestR = r; big = b; bestSh = sh; }
+                    }
+                }
+                if (big == null) break;
+                int shift = bestSh;
+                big.Sort((x, y) => (x >> shift & 255).CompareTo(y >> shift & 255));
+                int mid = big.Count / 2;
+                boxes.Remove(big);
+                boxes.Add(big.GetRange(0, mid)); boxes.Add(big.GetRange(mid, big.Count - mid));
+            }
+            foreach (var b in boxes)
+            {
+                if (b.Count == 0) continue;
+                long r = 0, g = 0, bl = 0;
+                foreach (int c in b) { r += c >> 16 & 255; g += c >> 8 & 255; bl += c & 255; }
+                yield return (int)(r / b.Count) << 16 | (int)(g / b.Count) << 8 | (int)(bl / b.Count);
+            }
         }
 
         // GIF LZW (variable code width, clear at 4096 codes), same width rules as the classic compress/GIF encoders
