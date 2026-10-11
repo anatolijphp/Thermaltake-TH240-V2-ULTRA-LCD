@@ -100,7 +100,7 @@ TT LCD Studio runs on Ubuntu too, with the same look: a native GTK window over t
 <img src="docs/media/ubuntu-dashboard.png" alt="TT LCD Studio on Ubuntu: dashboard and live preview" width="860">
 
 ```
-sudo apt install ./ttlcd_1.2.2_all.deb ./ttlcd-studio_1.2.2_all.deb   # from the release
+sudo apt install ./ttlcd_1.3.1_all.deb ./ttlcd-studio_1.3.1_all.deb   # from the release
 ttlcd-studio                                                          # or "TT LCD Studio" in the app menu
 ```
 
@@ -111,13 +111,24 @@ still part of any current desktop - so both packages install cleanly on 26.04 to
 
 - **Everything Linux can do, in the window:**
   - dashboard
-  - Image, GIF, Colour, Clock and Off modes with the overlay
+  - Image, GIF, Colour, Clock, Aura Sync and Off modes with the overlay
   - drag-and-drop lines and per-reading styles
   - device and streaming settings
   - the idle picture
   - tray icon (AppIndicator) and start with the desktop session
 - **CPU temperature:** read straight from the kernel's sensor driver (k10temp, zenpower, coretemp); nothing to install.
-- **Aura Sync on Linux:** follows Aura Sync from armory-crate (a Linux Armoury Crate replacement). Run `armory-crate virtual add ttlcd` once, then choose the Aura Sync mode.
+- **Aura Sync on Linux:** follows Aura Sync from armory-crate, a separate Linux Armoury Crate replacement. ttlcd
+  installs no plugin or service of its own for this. Its Aura HAL plugin and Armoury Crate are Windows-only. The
+  armory-crate side is needed instead:
+  1. Install armory-crate (`./packaging/install.sh` in its folder).
+  2. Start its Aura service: `systemctl --user enable --now armory-crated`.
+  3. Add the TT LCD virtual device once: `armory-crate virtual add ttlcd`. armory-crated then publishes the colours
+     to `$XDG_RUNTIME_DIR/armory-crate/virtual/ttlcd.ttas`.
+  4. Choose the Aura Sync mode in the window, or run `ttlcd set Mode Aura` for the background service.
+
+  Until armory-crated is installed, the Aura Sync tile is greyed out and its description says what to install.
+  It becomes available on its own once the service is there, without restarting Studio. While armory-crated isn't
+  running, the screen shows "Waiting for armory-crated" and picks the colours up again once the service is back.
 - **Windows-only for now:** Wallpaper Engine, screen mirroring, video and automatic game detection.
   Game mode can still be switched on by hand.
 - **Cooler access without root:** the package adds a udev rule (replug the cooler or reboot once after installing).
@@ -127,7 +138,7 @@ still part of any current desktop - so both packages install cleanly on 26.04 to
 
 ```
 systemctl --user enable --now ttlcd       # drive the screen, also after every login
-ttlcd set Mode Clock                      # or Image / Gif / Color / Off; the service picks it up
+ttlcd set Mode Clock                      # or Image / Gif / Color / Aura / Off; the service picks it up
 ttlcd set GifPath ~/Pictures/loop.gif
 ttlcd config                              # all settings (~/.config/ttlcd/config.xml)
 ```
