@@ -97,7 +97,7 @@ Uninstalling keeps your settings in `%APPDATA%\ttlcd`. The shared Aura plugin an
 
 TT LCD Studio runs on Ubuntu too, with the same look: a native GTK window over the same engine and settings.
 
-<img src="docs/media/ubuntu-dashboard.png" alt="TT LCD Studio on Ubuntu: dashboard and live preview" width="860">
+<img src="docs/media/ubuntu.gif" alt="TT LCD Studio on Ubuntu: dashboard, display modes (Clock, Colour, Aura Sync), device and settings pages with the live preview" width="860">
 
 ```
 sudo apt install ./ttlcd_1.3.1_all.deb ./ttlcd-studio_1.3.1_all.deb   # from the release
@@ -117,18 +117,10 @@ still part of any current desktop - so both packages install cleanly on 26.04 to
   - the idle picture
   - tray icon (AppIndicator) and start with the desktop session
 - **CPU temperature:** read straight from the kernel's sensor driver (k10temp, zenpower, coretemp); nothing to install.
-- **Aura Sync on Linux:** follows Aura Sync from armory-crate, a separate Linux Armoury Crate replacement. ttlcd
-  installs no plugin or service of its own for this. Its Aura HAL plugin and Armoury Crate are Windows-only. The
-  armory-crate side is needed instead:
-  1. Install armory-crate (`./packaging/install.sh` in its folder).
-  2. Start its Aura service: `systemctl --user enable --now armory-crated`.
-  3. Add the TT LCD virtual device once: `armory-crate virtual add ttlcd`. armory-crated then publishes the colours
-     to `$XDG_RUNTIME_DIR/armory-crate/virtual/ttlcd.ttas`.
-  4. Choose the Aura Sync mode in the window, or run `ttlcd set Mode Aura` for the background service.
-
-  Until armory-crated is installed, the Aura Sync tile is greyed out and its description says what to install.
-  It becomes available on its own once the service is there, without restarting Studio. While armory-crated isn't
-  running, the screen shows "Waiting for armory-crated" and picks the colours up again once the service is back.
+- **Aura Sync on Linux:** needs [armory-crate](https://github.com/anatolijphp/armory-crate-alternative-ubuntu), a separate Linux replacement for Armoury Crate.
+  ttlcd installs no plugin or service of its own for this; follow armory-crate's instructions to set it up for
+  ttlcd. Until armory-crate is installed, the Aura Sync mode is greyed out. It becomes available on its own once
+  armory-crate is there, without restarting Studio.
 - **Windows-only for now:** Wallpaper Engine, screen mirroring, video and automatic game detection.
   Game mode can still be switched on by hand.
 - **Cooler access without root:** the package adds a udev rule (replug the cooler or reboot once after installing).
@@ -224,6 +216,10 @@ rotation), encodes it and streams it at up to 30 fps. The protocol is documented
 off-screen window and saves it as a GIF ([`src/Record.cs`](src/Record.cs)). Close the running Studio first; the scenes
 change settings like a user would, so restore `%APPDATA%\ttlcd\config.xml` afterwards. For the GIF mode, set
 `TTLCD_REC_GIF` to an animated GIF to play.
+
+On Linux, `ttlcd-studio --record docs/media/ubuntu.gif tour 0.7` records the Ubuntu tour in the real window
+([`src/gtk/Record.cs`](src/gtk/Record.cs), the same GIF writer). Point `XDG_CONFIG_HOME` at a copy of the config
+so the mode changes don't touch your own settings.
 </details>
 
 ## ⚠️ Warnings
