@@ -273,6 +273,7 @@ namespace TtLcd
                 {
                     var i = LoadImage(c.ImagePath);
                     if (i == null) { note = "Choose an image"; return Message("No image selected"); }
+                    delay = streamDelay;
                     return Render.Compose(i, Lcd.Width, Lcd.Height, c.FitContain, Rgb(c.ColorRgb));
                 }
                 case Mode.Gif:
@@ -281,7 +282,7 @@ namespace TtLcd
                     if (frames == null || frames.Count == 0) { note = "Choose a GIF"; return Message("No GIF selected"); }
                     if (gifIdx >= frames.Count) gifIdx = 0;
                     var f = frames[gifIdx++];
-                    delay = f.Value;
+                    delay = Math.Max(f.Value, streamDelay); // never faster than the Fps cap, but a slower GIF keeps its own pace
                     return new Bitmap(f.Key);
                 }
                 case Mode.Video:
@@ -292,12 +293,12 @@ namespace TtLcd
                         if (string.IsNullOrEmpty(c.VideoPath)) { note = "Choose a video"; return Message("No video selected"); }
                         double p = VideoProgress;
                         note = p >= 0 ? string.Format("Preparing video {0:P0}", p) : "Video could not be loaded";
-                        delay = 200;
+                        delay = 200; // retry-poll interval while loading, unrelated to playback rate
                         return Message(p >= 0 ? string.Format("Preparing video\n{0:P0}", p) : "Video could not be loaded:\n" + Path.GetFileName(c.VideoPath));
                     }
                     if (videoIdx >= clip.Frames.Count) videoIdx = 0;
                     direct = clip.Frames[videoIdx++];
-                    delay = clip.FrameMs;
+                    delay = Math.Max(clip.FrameMs, streamDelay); // never faster than the Fps cap, but a slower clip keeps its own pace
                     return (Bitmap)Image.FromStream(new MemoryStream(direct));
                 }
                 case Mode.Aura:
@@ -310,12 +311,13 @@ namespace TtLcd
                 }
                 case Mode.Clock:
                 {
-                    delay = 500;
+                    delay = streamDelay;
                     var b = Render.Compose(null, Lcd.Width, Lcd.Height, false, Rgb(c.ColorRgb));
                     Render.DrawClock(b, c, Coolant, CpuTemp.C(), Cpu.Percent());
                     return b;
                 }
                 default: // Color
+                    delay = streamDelay;
                     return Render.Compose(null, Lcd.Width, Lcd.Height, false, Rgb(c.ColorRgb));
             }
         }
