@@ -195,12 +195,18 @@ namespace TtLcd.GtkUi
             track.SetSizeRequest(40, 20);
             track.Valign = Align.Center;
             track.Drawn += (o, a) => DrawTrack(a.Cr);
+            Action<object, ButtonPressEventArgs> toggle = (o, a) => { Active = !active; if (Toggled != null) Toggled(active); };
+            // DrawingArea has its own GdkWindow (unlike Label), so it swallows clicks before they reach the
+            // EventBox wrapping the whole row - without this, only clicks on the label or the row's padding
+            // toggled it, never the drawn switch itself.
+            track.AddEvents((int)Gdk.EventMask.ButtonPressMask);
+            track.ButtonPressEvent += (o, a) => toggle(o, a);
             var ev = new EventBox { VisibleWindow = false };
             var inner = new Box(Orientation.Horizontal, 10);
             inner.PackStart(track, false, false, 0);
             if (label != null) inner.PackStart(new Label(label), false, false, 0);
             ev.Add(inner);
-            ev.ButtonPressEvent += (o, a) => { Active = !active; if (Toggled != null) Toggled(active); };
+            ev.ButtonPressEvent += (o, a) => toggle(o, a);
             PackStart(ev, false, false, 0);
         }
 
