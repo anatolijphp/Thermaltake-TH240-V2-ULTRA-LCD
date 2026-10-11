@@ -100,7 +100,7 @@ TT LCD Studio runs on Ubuntu too, with the same look: a native GTK window over t
 <img src="docs/media/ubuntu.gif" alt="TT LCD Studio on Ubuntu: dashboard, display modes (Clock, Colour, Aura Sync), device and settings pages with the live preview" width="860">
 
 ```
-sudo apt install ./ttlcd-studio_1.3.2_all.deb   # from the release, or open the file in the App Center
+sudo apt install ./ttlcd-studio_1.3.3_all.deb   # from the release, or open the file in the App Center
 ttlcd-studio                                     # or "TT LCD Studio" in the app menu
 ```
 
