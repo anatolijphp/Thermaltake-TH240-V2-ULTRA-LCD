@@ -117,7 +117,8 @@ still part of any current desktop - so both packages install cleanly on 26.04 to
   - the idle picture
   - tray icon (AppIndicator) and start with the desktop session
 - **CPU temperature:** read straight from the kernel's sensor driver (k10temp, zenpower, coretemp); nothing to install.
-- **Windows-only for now:** Wallpaper Engine, Aura Sync, screen mirroring, video and automatic game detection.
+- **Aura Sync on Linux:** follows Aura Sync from armory-crate (a Linux Armoury Crate replacement). Run `armory-crate virtual add ttlcd` once, then choose the Aura Sync mode.
+- **Windows-only for now:** Wallpaper Engine, screen mirroring, video and automatic game detection.
   Game mode can still be switched on by hand.
 - **Cooler access without root:** the package adds a udev rule (replug the cooler or reboot once after installing).
 

@@ -59,10 +59,11 @@ namespace TtLcd.GtkUi
         ComboBoxText stFont; ToggleButton stBold, stItalic; SwitchToggle stByTemp; Swatches stColour;
         bool styleLoading, missingFont;
 
-        static readonly Mode[] LinuxModes = { Mode.Off, Mode.Image, Mode.Gif, Mode.Color, Mode.Clock };
+        static readonly Mode[] LinuxModes = { Mode.Off, Mode.Image, Mode.Gif, Mode.Color, Mode.Clock, Mode.Aura };
         static readonly Dictionary<Mode, string> TileIcon = new Dictionary<Mode, string>
         {
             { Mode.Off, "power" }, { Mode.Image, "image" }, { Mode.Gif, "gif" }, { Mode.Color, "palette" }, { Mode.Clock, "clock" },
+            { Mode.Aura, "aura" },
         };
 
         Widget ModesPage()

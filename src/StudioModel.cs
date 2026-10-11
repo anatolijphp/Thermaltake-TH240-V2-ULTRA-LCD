@@ -23,7 +23,9 @@ namespace TtLcd
                 case Mode.Video: return "Plays a clip of up to 30 seconds in a loop. Choose the part to play, then zoom and pan to frame it.";
                 case Mode.Color: return "Fills the screen with one colour.";
                 case Mode.Clock: return "Time, date and sensor readings, arranged and styled below.";
-                case Mode.Aura: return "Adds the cooler screen to Armoury Crate as an Aura Sync device (\"TT LCD CL-W383\"). Its effects and colours drive an abstract visualiser on the LCD. Installing needs administrator rights and restarts the ASUS lighting service.";
+                case Mode.Aura: return Os.Linux
+                    ? "Follows Aura Sync from armory-crate: its effect and colours drive an abstract visualiser on the LCD. Add the screen there once with: armory-crate virtual add ttlcd"
+                    : "Adds the cooler screen to Armoury Crate as an Aura Sync device (\"TT LCD CL-W383\"). Its effects and colours drive an abstract visualiser on the LCD. Installing needs administrator rights and restarts the ASUS lighting service.";
                 case Mode.Off: return "The screen is blanked.";
                 default: return "";
             }

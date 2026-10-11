@@ -31,8 +31,58 @@ namespace TtLcd
         static MemoryMappedViewAccessor view;
         static DateTime nextTry;
 
+        // Linux: armory-crated (github: Armory-crate, docs/virtual-devices.md) publishes the same TTAS block as a
+        // file. Its writer uses a seqlock: seq is odd while a frame is being written, even when it is complete.
+        public static string LinuxPath()
+        {
+            string run = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+            return string.IsNullOrEmpty(run) ? null : Path.Combine(run, "armory-crate/virtual/ttlcd.ttas");
+        }
+
+        static byte[] ReadBlock(string path)
+        {
+            // A fresh unbuffered open each time: re-reading through one FileStream could be served from its buffer.
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1))
+            {
+                var buf = new byte[Size];
+                int got = 0, n;
+                while (got < Size && (n = fs.Read(buf, got, Size - got)) > 0) got += n;
+                return got == Size ? buf : null;
+            }
+        }
+
+        static AuraSnapshot ReadLinux()
+        {
+            string path = LinuxPath();
+            if (path == null || !File.Exists(path)) return null;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                byte[] a, b;
+                try { a = ReadBlock(path); b = ReadBlock(path); }
+                catch (IOException) { return null; }
+                catch (UnauthorizedAccessException) { return null; }
+                if (a == null || b == null) return null;
+                int seq = BitConverter.ToInt32(a, 4);
+                if ((seq & 1) != 0 || seq != BitConverter.ToInt32(b, 4)) continue;   // writer was mid-update
+                if (BitConverter.ToInt32(a, 0) != 0x53415454) return null;           // not running / closed
+                var s = new AuraSnapshot();
+                s.Seq = seq;
+                s.Effect = BitConverter.ToInt32(a, 8);
+                s.LedCount = BitConverter.ToInt32(a, 12);
+                s.Speed = BitConverter.ToInt32(a, 16);
+                s.Direction = BitConverter.ToInt32(a, 20);
+                s.SyncMs = BitConverter.ToInt64(a, 24);
+                long ticks = BitConverter.ToInt64(a, 32);
+                s.UpdatedUtc = ticks > 0 ? new DateTime(ticks, DateTimeKind.Utc) : DateTime.MinValue;
+                Buffer.BlockCopy(a, 40, s.Colors, 0, 64 * 4);
+                return s;
+            }
+            return null;
+        }
+
         public static AuraSnapshot Read()
         {
+            if (Os.Linux) return ReadLinux();
             if (view == null)
             {
                 if (DateTime.UtcNow < nextTry) return null;
@@ -101,13 +151,14 @@ namespace TtLcd
             var bmp = new Bitmap(Lcd.Width, Lcd.Height, PixelFormat.Format32bppRgb);
             if (s == null)
             {
-                status = "Waiting for Armoury Crate (Aura plugin not active)";
+                status = Os.Linux ? "Waiting for armory-crated (Aura Sync service not running)"
+                                  : "Waiting for Armoury Crate (Aura plugin not active)";
                 using (var g = Graphics.FromImage(bmp))
                 using (var f = new Font("Segoe UI", 24, GraphicsUnit.Pixel))
                 using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
                     g.Clear(Color.Black);
-                    g.DrawString("Waiting for\nArmoury Crate / Aura Sync", f, Brushes.White, new RectangleF(0, 0, Lcd.Width, Lcd.Height), sf);
+                    g.DrawString(Os.Linux ? "Waiting for\narmory-crated / Aura Sync" : "Waiting for\nArmoury Crate / Aura Sync", f, Brushes.White, new RectangleF(0, 0, Lcd.Width, Lcd.Height), sf);
                 }
                 return bmp;
             }

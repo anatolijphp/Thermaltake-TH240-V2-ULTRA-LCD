@@ -11,10 +11,12 @@ namespace TtLcd
     {
         public static readonly bool Linux = Environment.OSVersion.Platform == PlatformID.Unix;
 
-        // Modes that need Windows (virtual display, GDI screen capture, Media Foundation, Armoury Crate)
+        // Modes that need Windows (virtual display, GDI screen capture, Media Foundation). Aura works on both:
+        // Armoury Crate's plugin on Windows, armory-crated's TTAS file on Linux (AuraState.ReadLinux).
         public static bool Supports(Mode m)
         {
-            return !Linux || m == Mode.Image || m == Mode.Gif || m == Mode.Color || m == Mode.Clock || m == Mode.Off;
+            return !Linux || m == Mode.Image || m == Mode.Gif || m == Mode.Color || m == Mode.Clock || m == Mode.Off
+                || m == Mode.Aura;
         }
     }
 

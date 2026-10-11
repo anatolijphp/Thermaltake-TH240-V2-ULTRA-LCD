@@ -194,19 +194,19 @@ namespace TtLcd.GtkUi
         {
             track.SetSizeRequest(40, 20);
             track.Valign = Align.Center;
+            // DrawingArea has its own GdkWindow by default (unlike Label), so it physically owns that screen
+            // region and absorbs clicks before they ever reach the EventBox wrapping the whole row - no
+            // handler attached to track itself fixes that, since the window intercepts input regardless.
+            // HasWindow=false makes it paint into the parent's window instead (Drawn still fires the same
+            // way), so clicks fall through to ev below exactly like they already do over the Label.
+            track.HasWindow = false;
             track.Drawn += (o, a) => DrawTrack(a.Cr);
-            Action<object, ButtonPressEventArgs> toggle = (o, a) => { Active = !active; if (Toggled != null) Toggled(active); };
-            // DrawingArea has its own GdkWindow (unlike Label), so it swallows clicks before they reach the
-            // EventBox wrapping the whole row - without this, only clicks on the label or the row's padding
-            // toggled it, never the drawn switch itself.
-            track.AddEvents((int)Gdk.EventMask.ButtonPressMask);
-            track.ButtonPressEvent += (o, a) => toggle(o, a);
             var ev = new EventBox { VisibleWindow = false };
             var inner = new Box(Orientation.Horizontal, 10);
             inner.PackStart(track, false, false, 0);
             if (label != null) inner.PackStart(new Label(label), false, false, 0);
             ev.Add(inner);
-            ev.ButtonPressEvent += (o, a) => toggle(o, a);
+            ev.ButtonPressEvent += (o, a) => { Active = !active; if (Toggled != null) Toggled(active); };
             PackStart(ev, false, false, 0);
         }
 
@@ -431,6 +431,12 @@ namespace TtLcd.GtkUi
                     foreach (var p in new[] { new[] { 8.0, 9.0 }, new[] { 12.0, 7.0 }, new[] { 16.0, 9.5 }, new[] { 8.5, 14.0 } })
                     { cr.Arc(p[0], p[1], 1.4, 0, 2 * Math.PI); cr.Fill(); }
                     cr.Arc(15, 15.5, 2.2, 0, 2 * Math.PI); cr.Stroke();
+                    break;
+                case "aura": // three nested arcs, like a lighting ring
+                    cr.Arc(12, 13, 9, Math.PI * 0.95, Math.PI * 2.05); cr.Stroke();
+                    cr.Arc(12, 13, 5.5, Math.PI * 1.05, Math.PI * 1.95); cr.Stroke();
+                    cr.Arc(12, 13, 2, 0, 2 * Math.PI); cr.Fill();
+                    cr.MoveTo(4, 19); cr.LineTo(20, 19); cr.Stroke();
                     break;
                 case "clock":
                     cr.Arc(12, 12, 9, 0, 2 * Math.PI); cr.Stroke();

@@ -165,13 +165,24 @@ Water temperature is then polled at `GameSensorMs`. The CPU-temp helper reads it
     `| ...t64` alternatives for the Ubuntu 24.04→26.04 time_t64 package rename) - those aren't going anywhere.
     Verified end to end on 26.04 resolute: fetched, built, installed via `apt install`, `ttlcd-studio` launched
     for real (`--screenshot dashboard` rendered the live gauges, cooler detected over hidraw).
-- GTK Studio: Linux modes only (Image, GIF, Colour, Clock, Off); no game detection (manual game mode); CPU temperature
+- GTK Studio: Linux modes only (Image, GIF, Colour, Clock, Aura, Off); no game detection (manual game mode); CPU temperature
   from hwmon. It stops the `ttlcd` user service while open. GTK# is the old 2.99.3 binding: use GTK 3.0 API only (no
   FlowBox/Stack/HeaderBar, MarginLeft/Right instead of Start/End). `System.Action` must be qualified (Gtk.Action).
 - `TTLcdStudio.exe --screenshot <png> <dashboard|modes[:Mode]|device|settings|idle>` (also `TTLCD_SHOT_SELECT`,
   `TTLCD_SHOT_HEIGHT`) reads the window pixels from X; CI runs it under Xvfb and uploads `screenshots-linux` next to the
   WPF `screenshots-windows`. No local Mono/GTK (install-nothing rule): the Linux UI is checked through these.
-- `src/LinuxHid.cs`: `Os.Linux`, `Os.Supports(mode)` (Image, Gif, Color, Clock, Off), hidraw enumeration through
+- Aura on Linux (2026-10-11): `AuraState.ReadLinux()` reads `$XDG_RUNTIME_DIR/armory-crate/virtual/ttlcd.ttas`.
+  That file is the same TTAS block the Windows plugin writes. It is published by armory-crated, the Linux Aura Sync
+  service in `~/Armory-crate` (`armory-crate virtual add ttlcd`; spec in its `docs/virtual-devices.md`).
+  - Its writer uses a seqlock (odd seq = mid-write) and sends finished frames as effect 0 ("Manual").
+  - Each read opens the file fresh, twice, unbuffered. A block that is torn, odd or closed (magic 0) returns null,
+    which shows "Waiting for armory-crated".
+  - Verified end to end against the LCD itself (2026-10-11): `armory-crated` running with `virtual:ttlcd` enabled,
+    TTAS block inspected directly (seq even and climbing, magic correct, 8 live colours), then `ttlcd run` with
+    Mode=Aura reported `Aura Sync · Manual · 30 fps` and the visualiser rendered the breathing effect's colour on
+    the real cooler screen. Also checked restarting `armory-crated` while `ttlcd run` is live - it recovers on its
+    own, no restart needed on the ttlcd side.
+- `src/LinuxHid.cs`: `Os.Linux`, `Os.Supports(mode)` (Image, Gif, Color, Clock, Aura, Off), hidraw enumeration through
   `/sys/class/hidraw/*/device/uevent` (HID_ID, HID_PHYS ".../inputN" = interface). hidraw reads return the report
   without the report-ID byte; `Lcd.ReadCtrl` shifts it. Mono named mutexes are per process only.
 - Engine on Linux: `/proc/stat` CPU load, `/proc/meminfo` RAM, hwmon (k10temp/zenpower/coretemp) CPU temperature;
