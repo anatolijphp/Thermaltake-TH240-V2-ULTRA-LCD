@@ -38,14 +38,15 @@ namespace TtLcd.GtkUi
             root.PackStart(TitleBar(), false, false, 0);
             var body = new Box(Orientation.Horizontal, 0);
             body.PackStart(Nav(), false, false, 0);
-            var content = new Bloom(this);
+            var content = new Bloom();
             var cols = new Box(Orientation.Horizontal, 0);
             cols.PackStart(Pages(), true, true, 0);
             cols.PackStart(PreviewColumn(), false, false, 0);
             content.Add(cols);
             body.PackStart(content, true, true, 0);
             root.PackStart(body, true, true, 0);
-            Add(root);
+            root.Hexpand = root.Vexpand = true;
+            Add(ResizeFrame(root));
 
             ShowPage("dashboard");
             GLib.Timeout.Add(40, () => { UpdatePreview(); return true; });
@@ -88,6 +89,31 @@ namespace TtLcd.GtkUi
             return bar;
         }
 
+        // ---------------- resizing ----------------
+        // Decorated=false leaves resizing to the app: a thin frame of drag handles around the window (with the
+        // matching resize cursors) plus a visible grip in the bottom-right corner. Hidden while maximised.
+        readonly List<ResizeHandle> handles = new List<ResizeHandle>();
+        Widget ResizeFrame(Widget content)
+        {
+            var g = new Grid();
+            Func<Gdk.WindowEdge, int, int, ResizeHandle> h = (edge, x, y) =>
+            {
+                var r = new ResizeHandle(this, edge, false);
+                handles.Add(r); g.Attach(r, x, y, 1, 1); return r;
+            };
+            h(Gdk.WindowEdge.NorthWest, 0, 0); h(Gdk.WindowEdge.North, 1, 0).Hexpand = true; h(Gdk.WindowEdge.NorthEast, 2, 0);
+            h(Gdk.WindowEdge.West, 0, 1).Vexpand = true; g.Attach(content, 1, 1, 1, 1); h(Gdk.WindowEdge.East, 2, 1).Vexpand = true;
+            h(Gdk.WindowEdge.SouthWest, 0, 2); h(Gdk.WindowEdge.South, 1, 2).Hexpand = true; h(Gdk.WindowEdge.SouthEast, 2, 2);
+            WindowStateEvent += (o, a) => UpdateResizeFrame();
+            return g;
+        }
+
+        void UpdateResizeFrame()
+        {
+            bool free = Window == null || (Window.State & (Gdk.WindowState.Maximized | Gdk.WindowState.Fullscreen)) == 0;
+            foreach (var r in handles) r.Visible = free;
+        }
+
         public bool HasTray;
         string currentPage = "dashboard";
 
@@ -105,6 +131,7 @@ namespace TtLcd.GtkUi
         public void ShowWindow()
         {
             ShowAll();
+            UpdateResizeFrame();
             Load();
             ShowPage(currentPage);
             if (idleOn) SetPreviewMode(true);
@@ -120,7 +147,7 @@ namespace TtLcd.GtkUi
         // ---------------- navigation ----------------
         Widget Nav()
         {
-            var panel = new NavPanel(this) { WidthRequest = 214 };
+            var panel = new NavPanel() { WidthRequest = 214 };
             var col = new Box(Orientation.Vertical, 0);
             var top = new Box(Orientation.Vertical, 0) { MarginTop = 10 };
             var toggle = new IconButton("menu", 40, 40, "Collapse menu") { IconSize = 16, Halign = Align.Start, MarginLeft = 13, MarginBottom = 8 };
@@ -340,6 +367,9 @@ namespace TtLcd.GtkUi
             liveCard = card;
             inner.PackStart(BuildIdlePanel(), false, false, 0);
             col.PackStart(inner, false, false, 0);
+            var grip = new ResizeHandle(this, Gdk.WindowEdge.SouthEast, true) { Halign = Align.End, Valign = Align.End, MarginRight = 3, MarginBottom = 3 };
+            handles.Add(grip);
+            col.PackEnd(grip, false, false, 0);
             return new ColumnBorder(col);
         }
 
@@ -413,36 +443,72 @@ namespace TtLcd.GtkUi
         static extern IntPtr gdk_pixbuf_get_from_window(IntPtr window, int x, int y, int width, int height);
     }
 
-    // Title bar background: dark strip, the brand panel with the red slash, the flowing RGB line; drag to move.
-    // Decorated=false (own title bar, see TitleBarArea below) means the window manager draws no resize grips
-    // of its own and gives the app no edge-drag resize at all unless it asks for one itself - which nothing
-    // here did. TryBegin starts one by hand (the same BeginResizeDrag the WM would use), called from every
-    // widget that covers one of the window's outer edges (TitleBarArea top, NavPanel left+bottom, Bloom
-    // right+bottom) before their own click handling.
-    static class ResizeEdge
+    // One resize handle: an edge or corner of the frame around the window (a 5 px strip with the matching cursor),
+    // or, with grip, the striped corner grip in the bottom-right corner that turns red on hover.
+    class ResizeHandle : DrawingArea
     {
-        public const int Margin = 6; // px from the window's outer edge that starts a resize drag
-
-        public static bool TryBegin(Window win, Widget w, Gdk.EventButton ev)
+        public const int Size = 5;
+        readonly Gdk.WindowEdge edge; readonly bool grip; bool hover;
+        public ResizeHandle(Window win, Gdk.WindowEdge edge, bool grip)
         {
-            if (ev.Button != 1 || win.Window == null) return false;
-            if ((win.Window.State & (Gdk.WindowState.Maximized | Gdk.WindowState.Fullscreen)) != 0) return false;
-            int wx, wy;
-            w.TranslateCoordinates(win, (int)ev.X, (int)ev.Y, out wx, out wy);
-            int winW, winH; win.GetSize(out winW, out winH);
-            bool left = wx <= Margin, right = wx >= winW - Margin;
-            bool top = wy <= Margin, bottom = wy >= winH - Margin;
-            if (!left && !right && !top && !bottom) return false;
-            Gdk.WindowEdge edge =
-                top && left ? Gdk.WindowEdge.NorthWest : top && right ? Gdk.WindowEdge.NorthEast :
-                bottom && left ? Gdk.WindowEdge.SouthWest : bottom && right ? Gdk.WindowEdge.SouthEast :
-                top ? Gdk.WindowEdge.North : bottom ? Gdk.WindowEdge.South :
-                left ? Gdk.WindowEdge.West : Gdk.WindowEdge.East;
-            win.BeginResizeDrag(edge, (int)ev.Button, (int)ev.XRoot, (int)ev.YRoot, ev.Time);
+            this.edge = edge; this.grip = grip;
+            NoShowAll = true; Visible = true;
+            if (grip) { SetSizeRequest(24, 24); TooltipText = "Drag to resize"; }
+            else SetSizeRequest(Size, Size);
+            Events |= Gdk.EventMask.ButtonPressMask | Gdk.EventMask.EnterNotifyMask | Gdk.EventMask.LeaveNotifyMask;
+            Realized += (o, a) => Window.Cursor = new Gdk.Cursor(Display, CursorFor(edge));
+            EnterNotifyEvent += (o, a) => { hover = true; QueueDraw(); };
+            LeaveNotifyEvent += (o, a) => { hover = false; QueueDraw(); };
+            ButtonPressEvent += (o, a) =>
+            {
+                if (a.Event.Button != 1 || win.Window == null) return;
+                win.BeginResizeDrag(edge, (int)a.Event.Button, (int)a.Event.XRoot, (int)a.Event.YRoot, a.Event.Time);
+            };
+        }
+
+        static Gdk.CursorType CursorFor(Gdk.WindowEdge e)
+        {
+            switch (e)
+            {
+                case Gdk.WindowEdge.NorthWest: return Gdk.CursorType.TopLeftCorner;
+                case Gdk.WindowEdge.North: return Gdk.CursorType.TopSide;
+                case Gdk.WindowEdge.NorthEast: return Gdk.CursorType.TopRightCorner;
+                case Gdk.WindowEdge.West: return Gdk.CursorType.LeftSide;
+                case Gdk.WindowEdge.East: return Gdk.CursorType.RightSide;
+                case Gdk.WindowEdge.SouthWest: return Gdk.CursorType.BottomLeftCorner;
+                case Gdk.WindowEdge.South: return Gdk.CursorType.BottomSide;
+                default: return Gdk.CursorType.BottomRightCorner;
+            }
+        }
+
+        protected override bool OnDrawn(Context cr)
+        {
+            double w = Allocation.Width, h = Allocation.Height;
+            if (grip)
+            {
+                // four diagonal strokes, the usual size-grip look
+                Theme.Set(cr, hover ? Theme.Accent : Theme.Text); cr.LineWidth = 2; cr.LineCap = LineCap.Round;
+                for (int i = 0; i < 4; i++)
+                {
+                    double d = 4 + i * 5;
+                    cr.MoveTo(w - 2, h - 2 - d); cr.LineTo(w - 2 - d, h - 2);
+                }
+                cr.Stroke();
+                return true;
+            }
+            // the frame: dark, with a hairline on the window's outer side (red while the pointer is on it)
+            Theme.Set(cr, Theme.TitleBg); cr.Rectangle(0, 0, w, h); cr.Fill();
+            Theme.Set(cr, hover ? Theme.Accent : Theme.Line);
+            string n = edge.ToString();
+            if (n.StartsWith("North")) { cr.Rectangle(0, 0, w, 1); cr.Fill(); }
+            if (n.StartsWith("South")) { cr.Rectangle(0, h - 1, w, 1); cr.Fill(); }
+            if (n.EndsWith("West")) { cr.Rectangle(0, 0, 1, h); cr.Fill(); }
+            if (n.EndsWith("East")) { cr.Rectangle(w - 1, 0, 1, h); cr.Fill(); }
             return true;
         }
     }
 
+    // Title bar background: dark strip, the brand panel with the red slash, the flowing RGB line; drag to move.
     class TitleBarArea : EventBox
     {
         readonly Window win;
@@ -452,7 +518,6 @@ namespace TtLcd.GtkUi
             win = w; VisibleWindow = false; AppPaintable = true;
             ButtonPressEvent += (o, a) =>
             {
-                if (ResizeEdge.TryBegin(win, this, a.Event)) return;
                 if (a.Event.Button != 1) return;
                 if (a.Event.Type == Gdk.EventType.TwoButtonPress) { if ((win.Window.State & Gdk.WindowState.Maximized) != 0) win.Unmaximize(); else win.Maximize(); return; }
                 win.BeginMoveDrag((int)a.Event.Button, (int)a.Event.XRoot, (int)a.Event.YRoot, a.Event.Time);
@@ -484,7 +549,7 @@ namespace TtLcd.GtkUi
     {
         public Widget Footer;
         uint widthAnim;
-        public NavPanel(Window win) { VisibleWindow = false; AppPaintable = true; ButtonPressEvent += (o, a) => ResizeEdge.TryBegin(win, this, a.Event); }
+        public NavPanel() { VisibleWindow = false; AppPaintable = true; }
 
         // Slides the collapse/expand the same way SwitchToggle/SegToggle animate elsewhere in this file
         // (200ms cubic ease) - WidthRequest snapped straight to the target had no transition at all.
@@ -514,7 +579,7 @@ namespace TtLcd.GtkUi
     // Faint red bloom behind the content, as in the WPF window.
     class Bloom : EventBox
     {
-        public Bloom(Window win) { VisibleWindow = false; AppPaintable = true; ButtonPressEvent += (o, a) => ResizeEdge.TryBegin(win, this, a.Event); }
+        public Bloom() { VisibleWindow = false; AppPaintable = true; }
         protected override bool OnDrawn(Context cr)
         {
             double w = Allocation.Width, h = Allocation.Height;
