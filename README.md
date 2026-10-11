@@ -100,14 +100,15 @@ TT LCD Studio runs on Ubuntu too, with the same look: a native GTK window over t
 <img src="docs/media/ubuntu.gif" alt="TT LCD Studio on Ubuntu: dashboard, display modes (Clock, Colour, Aura Sync), device and settings pages with the live preview" width="860">
 
 ```
-sudo apt install ./ttlcd_1.3.1_all.deb ./ttlcd-studio_1.3.1_all.deb   # from the release
-ttlcd-studio                                                          # or "TT LCD Studio" in the app menu
+sudo apt install ./ttlcd-studio_1.3.2_all.deb   # from the release, or open the file in the App Center
+ttlcd-studio                                     # or "TT LCD Studio" in the app menu
 ```
 
-`ttlcd-studio` is a separate package (it depends on `ttlcd` and installs it too if it's missing) and bundles
-GTK# 3 itself, since Debian dropped `libgtk3.0-cil` from its archives in 2023 and it's gone from Ubuntu entirely
-from 25.10 onward. Only the native GTK3/GLib/Pango/Atk/Cairo libraries are needed from the system - those are
-still part of any current desktop - so both packages install cleanly on 26.04 too.
+`ttlcd-studio` is the only file you need: it includes the `ttlcd` command and background service too (and
+replaces the `ttlcd` package if that is installed). Without the window, `ttlcd_<version>_all.deb` alone has just
+the command and the service. Studio bundles GTK# 3 itself, since Debian dropped `libgtk3.0-cil` from its archives
+in 2023 and it's gone from Ubuntu entirely from 25.10 onward. Only the native GTK3/GLib/Pango/Atk/Cairo libraries
+are needed from the system - those are still part of any current desktop - so it installs cleanly on 26.04 too.
 
 - **Everything Linux can do, in the window:**
   - dashboard
@@ -165,7 +166,7 @@ Sources and build output are kept apart. Everything built lands in `build\<os>\`
 | `build/linux/` | What |
 |---|---|
 | `ttlcd_<version>_all.deb` | Debian/Ubuntu package: `ttlcd` (CLI + service), udev rule, systemd user service |
-| `ttlcd-studio_<version>_all.deb` | Debian/Ubuntu package: `ttlcd-studio` (GTK window, bundles GTK# 3), menu entry; depends on and installs `ttlcd` |
+| `ttlcd-studio_<version>_all.deb` | Debian/Ubuntu package: `ttlcd-studio` (GTK window, bundles GTK# 3), menu entry, plus everything in `ttlcd` (replaces it) |
 | `ttlcd-<version>-linux.tar.gz` | The same files for other distributions |
 | `pkg/`, `pkg-studio/` | The installed layouts |
 

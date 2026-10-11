@@ -150,6 +150,10 @@ Water temperature is then polled at `GameSensorMs`. The CPU-temp helper reads it
   and `ttlcd-studio_<ver>_all.deb` (`pkg-studio/`, bundles GTK# 3 - see below), plus one tarball with both.
   Packaging files are in `linux/` (launchers `ttlcd` / `ttlcd-studio`, desktop entry, icon, udev rule, systemd
   user unit, `control` + `control-studio`, postinst).
+  - **`ttlcd-studio` is self-contained (1.3.2):** it carries all of `ttlcd`'s files, postinst and dependencies and
+    declares `Provides/Conflicts/Replaces: ttlcd`. Before, it depended on `ttlcd (= ver)`; the Ubuntu App Center
+    installs one local .deb at a time and failed on that dependency ("ttlcd ... not installable") while its UI
+    just kept spinning. Don't reintroduce a dependency on `ttlcd`. The tarball is Studio's tree.
   - **Why two packages, and GTK# is bundled, not depended on (2026-10-11):** `libgtk3.0-cil` (GTK# 3) was removed
     from Debian in 2023 and is gone from Ubuntu entirely from 25.10 questing onward (still in 24.04 noble) - a
     single package depending on it failed to install on a 26.04 resolute machine. `ttlcd` (CLI + service) has no

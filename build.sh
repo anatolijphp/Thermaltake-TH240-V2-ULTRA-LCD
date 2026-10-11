@@ -100,10 +100,16 @@ mcs -nologo -optimize+ -unsafe -target:exe -main:TtLcd.GtkUi.GtkProgram -out:"$L
 install -m 755 linux/ttlcd-studio "$PKGS/usr/bin/ttlcd-studio"
 install -m 644 linux/ttlcd-studio.desktop "$PKGS/usr/share/applications/ttlcd-studio.desktop"
 install -m 644 linux/ttlcd-studio.png "$PKGS/usr/share/icons/hicolor/128x128/apps/ttlcd-studio.png"
-sed "s/@VERSION@/$VER/" linux/control-studio > "$PKGS/DEBIAN/control"
+# ttlcd-studio is self-contained (Provides/Conflicts/Replaces: ttlcd): one .deb a desktop installer (App Center,
+# which installs a single file and can't resolve a dependency on a package that's in no repository) can install
+# by itself. So it carries the ttlcd package's files, postinst and dependencies too.
+cp -a "$PKG/usr" "$PKG/lib" "$PKGS/"
+install -m 755 linux/postinst "$PKGS/DEBIAN/postinst"
+CORE_DEPENDS=$(sed -n 's/^Depends: //p' linux/control)
+sed -e "s/@VERSION@/$VER/g" -e "s/@CORE_DEPENDS@/$CORE_DEPENDS/" linux/control-studio > "$PKGS/DEBIAN/control"
 
 dpkg-deb --root-owner-group --build "$PKGS" "$OUT/ttlcd-studio_${VER}_all.deb" >/dev/null
 
 echo "[5/5] ttlcd-${VER}-linux.tar.gz"
-tar -czf "$OUT/ttlcd-${VER}-linux.tar.gz" --owner=0 --group=0 -C "$PKG" usr lib -C "$PKGS" usr
+tar -czf "$OUT/ttlcd-${VER}-linux.tar.gz" --owner=0 --group=0 -C "$PKGS" usr lib   # Studio's tree has everything
 echo "build OK: $OUT"

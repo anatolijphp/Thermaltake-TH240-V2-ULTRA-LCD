@@ -94,14 +94,29 @@ jobs:
             ttlcd config | grep -q "Mode = Clock"
             ttlcd probe || true
             test -s /tmp/clock.jpg && test -f /lib/udev/rules.d/60-ttlcd.rules && test -f /usr/lib/systemd/user/ttlcd.service
-            # ttlcd-studio bundles GTK# itself, so it installs with just the native GTK3/glib/pango/atk/cairo libs
+            # ttlcd-studio bundles GTK# itself, so it installs with just the native GTK3/glib/pango/atk/cairo libs.
+            # It contains and replaces ttlcd: installing it over ttlcd must keep the ttlcd command, unit and rule.
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd-studio_*_all.deb xvfb xauth fonts-ubuntu >/dev/null
+            ! dpkg -s ttlcd 2>/dev/null | grep -q "^Status: install ok"
+            ttlcd render /tmp/clock2.jpg Clock && test -s /tmp/clock2.jpg
+            test -f /lib/udev/rules.d/60-ttlcd.rules && test -f /usr/lib/systemd/user/ttlcd.service
             mkdir -p /pkg/shots
             for p in dashboard modes:Clock modes:Image device settings idle; do
               xvfb-run -a -s "-screen 0 1400x1400x24" env TTLCD_SHOT_HEIGHT=1300 ttlcd-studio --screenshot /pkg/shots/linux-$(echo $p | tr : _).png $p
             done
             xvfb-run -a -s "-screen 0 1400x1400x24" env TTLCD_SHOT_HEIGHT=1300 TTLCD_SHOT_SELECT=ClkItems:0 ttlcd-studio --screenshot /pkg/shots/linux-modes_Clock_style.png modes:Clock
             test -s /pkg/shots/linux-dashboard.png
+          '
+
+      # The App Center case: only the ttlcd-studio .deb, on a clean system, must install and bring the CLI along.
+      - name: Package test (ttlcd-studio alone)
+        run: |
+          docker run --rm -v "$PWD/build/linux:/pkg" ubuntu:24.04 sh -ec '
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd-studio_*_all.deb >/dev/null
+            ttlcd render /tmp/clock.jpg Clock && test -s /tmp/clock.jpg
+            test -f /lib/udev/rules.d/60-ttlcd.rules && test -f /usr/lib/systemd/user/ttlcd.service
+            test -x /usr/bin/ttlcd-studio && test -f /usr/lib/ttlcd/TTLcdStudio.exe
           '
 
       - uses: actions/upload-artifact@v4
