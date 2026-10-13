@@ -67,6 +67,7 @@ pub struct Dev {
 }
 
 unsafe impl Send for Dev {}
+unsafe impl Sync for Dev {}
 
 impl Dev {
     pub fn open(path: &str) -> io::Result<Dev> {
@@ -162,6 +163,7 @@ impl Drop for Dev {
 pub struct DeviceMutex(HANDLE);
 
 unsafe impl Send for DeviceMutex {}
+unsafe impl Sync for DeviceMutex {}
 
 impl DeviceMutex {
     pub fn acquire() -> io::Result<DeviceMutex> {

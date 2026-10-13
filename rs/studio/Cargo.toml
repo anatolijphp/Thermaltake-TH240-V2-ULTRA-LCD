@@ -12,3 +12,7 @@ path = "src/main.rs"
 ttlcd-core = { path = "../core" }
 tao = { version = "0.37", default-features = false, features = ["rwh_06", "x11"] }
 wry = "0.57"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tray-icon = "0.26"
+rfd = { version = "0.17", default-features = false, features = ["gtk3"] }

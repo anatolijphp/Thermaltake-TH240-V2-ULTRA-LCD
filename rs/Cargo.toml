@@ -1,10 +1,10 @@
 # Rust port (proof of concept). Built with the toolchain rs/fetch.sh (Linux) / rs\fetch.cmd (Windows) puts in tools/.
 [workspace]
-members = ["core", "cli", "studio"]
+members = ["core", "cli", "studio", "aura-hal", "rescue", "patchpanel", "installer"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "2.0.0"
 edition = "2021"
 license = "MIT"
 

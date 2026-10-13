@@ -9,6 +9,8 @@ use tao::window::WindowBuilder;
 use ttlcd_core::{lcd, Lcd};
 use wry::WebViewBuilder;
 
+mod os;
+
 enum Cmd {
     Color(u32),
     Brightness(u8),
