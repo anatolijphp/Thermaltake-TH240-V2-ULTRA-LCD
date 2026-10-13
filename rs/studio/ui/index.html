@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>TT LCD Studio</title>
+<style>
+  :root {
+    --bg: #131314; --panel: #1c1c1f; --line: #2a2a2e; --text: #e8e8ea; --dim: #8c8c93; --accent: #ff2a3c;
+    --ok: #3ccf73;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.4 "Segoe UI", "Cantarell", "Ubuntu", system-ui, sans-serif; user-select: none; }
+  body { display: grid; grid-template-columns: 300px 1fr; gap: 16px; padding: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  h2 { margin: 0 0 12px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
+  .preview { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .lcd { width: 240px; height: 240px; border-radius: 50%; border: 6px solid #0a0a0b;
+    box-shadow: 0 0 0 1px var(--line), 0 10px 40px rgba(0,0,0,.6); transition: background .15s; }
+  .state { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 13px; text-align: center; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #55555c; flex: none; }
+  .on .dot { background: var(--ok); }
+  .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .sw { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+  .sw.sel { border-color: var(--text); }
+  input[type=color] { width: 44px; height: 30px; border: 1px solid var(--line); background: none; border-radius: 6px; padding: 0; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .row label { color: var(--dim); min-width: 90px; }
+  dl { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; margin: 0; }
+  dt { color: var(--dim); } dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .big { font-size: 28px; font-weight: 300; }
+</style>
+</head>
+<body>
+  <div class="card preview">
+    <h2>Preview</h2>
+    <div class="lcd" id="lcd"></div>
+    <div class="state" id="state"><span class="dot"></span><span id="stateText">Looking for the cooler…</span></div>
+    <div class="big" id="coolant">–</div>
+  </div>
+  <div class="side">
+    <div class="card">
+      <h2>Colour</h2>
+      <div class="swatches" id="swatches"></div>
+      <div class="row"><label>Custom</label><input type="color" id="pick" value="#2080ff"></div>
+    </div>
+    <div class="card">
+      <h2>Screen</h2>
+      <div class="row"><label>Brightness</label><input type="range" id="bright" min="0" max="100" value="100"><span id="bv">100</span></div>
+    </div>
+    <div class="card">
+      <h2>Device</h2>
+      <dl>
+        <dt>Serial</dt><dd id="serial">–</dd>
+        <dt>Firmware</dt><dd id="fw">–</dd>
+        <dt>Rotation</dt><dd id="rot">–</dd>
+        <dt>Frame rate</dt><dd id="fps">–</dd>
+      </dl>
+    </div>
+  </div>
+<script>
+  const $ = id => document.getElementById(id);
+  const send = m => window.ipc.postMessage(m);
+  const colors = ["#2080ff", "#ff2a3c", "#3ccf73", "#ffb020", "#a050ff", "#00d0d0", "#ffffff", "#000000"];
+  function setColor(hex) {
+    $("lcd").style.background = hex;
+    $("pick").value = hex;
+    document.querySelectorAll(".sw").forEach(s => s.classList.toggle("sel", s.dataset.c === hex));
+    send("color:" + hex.slice(1));
+  }
+  for (const c of colors) {
+    const s = document.createElement("div");
+    s.className = "sw"; s.style.background = c; s.dataset.c = c;
+    s.onclick = () => setColor(c);
+    $("swatches").appendChild(s);
+  }
+  $("pick").oninput = e => setColor(e.target.value);
+  let bt;
+  $("bright").oninput = e => {
+    $("bv").textContent = e.target.value;
+    clearTimeout(bt); bt = setTimeout(() => send("brightness:" + e.target.value), 80);
+  };
+  // called from Rust
+  window.onStatus = s => {
+    $("state").classList.toggle("on", s.connected);
+    $("stateText").textContent = s.connected ? "Connected" : s.message;
+    if (s.connected) {
+      $("serial").textContent = s.serial; $("fw").textContent = s.firmware; $("rot").textContent = s.rotation + "°";
+    } else { $("coolant").textContent = "–"; $("fps").textContent = "–"; }
+  };
+  window.onReading = r => {
+    $("coolant").textContent = r.coolant === null ? "no sensor reply" : r.coolant.toFixed(1) + " °C";
+    $("fps").textContent = r.fps.toFixed(1) + " fps";
+  };
+  setColor(colors[0]);
+</script>
+</body>
+</html>

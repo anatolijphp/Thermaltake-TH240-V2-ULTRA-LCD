@@ -1,0 +1,9 @@
+# Intermediate output goes under build/ like everything else; rs/build.* copies the finished binaries to build/<os>/rs/.
+[build]
+target-dir = "../build/rs-target"
+
+# Windows: link with llvm-mingw (tools/llvm-mingw/bin is put on PATH by the build scripts). Static CRT and libunwind,
+# so the exe needs no DLL beyond what Windows ships.
+[target.x86_64-pc-windows-gnullvm]
+linker = "x86_64-w64-mingw32-clang"
+rustflags = ["-C", "target-feature=+crt-static"]

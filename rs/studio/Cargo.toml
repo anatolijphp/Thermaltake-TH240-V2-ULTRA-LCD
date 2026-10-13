@@ -1,0 +1,14 @@
+[package]
+name = "ttlcd-studio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ttlcd-studio"
+path = "src/main.rs"
+
+[dependencies]
+ttlcd-core = { path = "../core" }
+tao = { version = "0.37", default-features = false, features = ["rwh_06", "x11"] }
+wry = "0.57"

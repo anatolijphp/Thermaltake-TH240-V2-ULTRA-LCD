@@ -132,6 +132,38 @@ jobs:
             build/linux/*.deb
             build/linux/*.tar.gz
 
+  # Rust port (proof of concept, rs/): built with the toolchain rs/fetch.* downloads into tools/ (pinned + SHA256),
+  # not the runner's preinstalled Rust, so CI proves a clean machine needs nothing installed. Not released yet.
+  rust:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: rs\build.cmd
+
+      # runtime libraries only (what an Ubuntu desktop already has); rs/fetch.sh links against them via pkg-config stubs
+      - name: Build (Linux, plus the Windows exe cross-linked with llvm-mingw)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 libgtk-3-0t64
+          sh rs/build.sh
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then build/windows/rs/ttlcd-rs.exe list; else build/linux/rs/ttlcd-rs list; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-${{ runner.os }}
+          path: build/*/rs/
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [windows, linux]
