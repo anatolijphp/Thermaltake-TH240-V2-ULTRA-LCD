@@ -22,7 +22,8 @@ pub fn water_valid(c: f64) -> bool {
 }
 
 pub fn deg(c: f64, fahrenheit: bool) -> String {
-    if fahrenheit { format!("{}°F", (c * 9.0 / 5.0 + 32.0).round()) } else { format!("{}°C", c.round()) }
+    // .NET Math.Round rounds halves to even (32.5 -> 32); + 0.0 turns -0 into 0
+    if fahrenheit { format!("{}°F", (c * 9.0 / 5.0 + 32.0).round_ties_even() + 0.0) } else { format!("{}°C", c.round_ties_even() + 0.0) }
 }
 
 /// cool -> hot over lo..hi: cyan, green, yellow, red
@@ -163,6 +164,8 @@ struct Placed {
     col: Color,
     fx: TextEffect,
     size: f32,
+    #[cfg_attr(not(test), allow(dead_code))]
+    line: usize, // index of its line (checked by the tests)
 }
 
 fn rows_from<'a>(items: &'a [Seg], lines: &[Vec<i32>]) -> Vec<Row<'a>> {
@@ -270,13 +273,13 @@ fn place(cfg: &Config, rows: &[Row], s: f32, gap: f32, anchor_y: f32, v_anchor: 
                 let l = l.clone().transform(Transform::from_translate(pb.left() + (w - lb.width()) / 2.0 - lb.left(), 0.0)).unwrap_or(l);
                 path = path.clone().transform(Transform::from_translate((w - pb.width()) / 2.0, 0.0)).unwrap_or(path);
                 right = pb.left() + w;
-                segs.push(Placed { path: l, col: sg.col, fx: sg.st.Effect, size: sg.label_size() * s });
+                segs.push(Placed { path: l, col: sg.col, fx: sg.st.Effect, size: sg.label_size() * s, line: lines.len() });
             }
             if pb.width() > 0.0 {
                 x = right + size.max(r.size() * s * 0.5) * 0.6;
             }
             pad = pad.max(size * effect_pad(sg.st.Effect));
-            segs.push(Placed { path, col: sg.col, fx: sg.st.Effect, size });
+            segs.push(Placed { path, col: sg.col, fx: sg.st.Effect, size, line: lines.len() });
         }
         let mut b: Option<Rect> = None;
         for sp in &segs {
@@ -414,7 +417,8 @@ pub fn draw_overlay(p: &mut Pixmap, cfg: &Config, v: &Values) {
         2 => (CY, 0),
         _ => (480.0 - 62.0, 1),
     };
-    draw_readings(p, cfg, &rows_from(&items, &ls), gap, y, a, cfg.OverlayBar);
+    // The C# renderer never drew the dark band (it passes false; Config.OverlayBar has no UI), so neither does this.
+    draw_readings(p, cfg, &rows_from(&items, &ls), gap, y, a, false);
 }
 
 /// Configurable clock / readings face, around the centre (plus the vertical offset).
@@ -451,5 +455,195 @@ mod tests {
         assert_eq!(lines("2,0", TextLayout::Stack, 0, &OVERLAY_IDS), vec![vec![2], vec![0], vec![3]]);
         assert_eq!(lines("2,0", TextLayout::Auto, 0, &OVERLAY_IDS), vec![vec![2, 0, 3]]);
         assert_eq!(lines_to_string(&[vec![0, 2], vec![], vec![3]]), "0,2||3|");
+    }
+
+    fn style(id: i32, size: i32, fx: TextEffect, above: bool) -> ElementStyle {
+        ElementStyle { Id: id, Size: size, Effect: fx, Label: true, LabelAbove: above, ..Default::default() }
+    }
+
+    fn values() -> Values {
+        Values { water: 31.4, cpu_temp: 57, cpu_load: 43 }
+    }
+
+    fn now() -> LocalTime {
+        LocalTime { year: 2026, month: 10, day: 13, hour: 20, minute: 58, second: 0, weekday: 2 }
+    }
+
+    /// Clock configs that exercise every layout path: sizes, effects, label above, alignments, empty lines.
+    fn configs() -> Vec<Config> {
+        let mut v = Vec::new();
+        let fxs = [TextEffect::None, TextEffect::Shadow, TextEffect::Outline, TextEffect::Glow];
+        for (k, order) in ["0|1|2|3|4|", "0,2|1,3,4|", "0,1,2,3,4|", "0||2|", "2,3|0|1||4|"].iter().enumerate() {
+            for align in 0..3 {
+                for big in [40, 120, 300] {
+                    let mut c = Config { ShowTime: true, ShowDate: true, ShowWaterTemp: true, ShowCpuTemp: true, ShowCpuLoad: true, ..Default::default() };
+                    c.ClockOrder = (*order).into();
+                    c.TextAlign = align;
+                    c.TextOffsetY = [0, -60, 80][k % 3];
+                    c.ClockStyles = Some((0..5).map(|id| style(id, if id == 0 { big } else { big / 2 }, fxs[(id as usize + k) % 4], id == 2 || (id == 3 && align == 1))).collect());
+                    v.push(c);
+                }
+            }
+        }
+        v
+    }
+
+    fn clock_rows(c: &Config) -> (Vec<Seg>, Vec<Vec<i32>>) {
+        let items: Vec<Seg> = CLOCK_IDS.iter().map(|&id| reading(c, false, id, &values(), &now())).collect();
+        (items, lines(&c.ClockOrder, c.ClockLayout, c.ClockBreaks, &CLOCK_IDS))
+    }
+
+    /// The scale draw_readings settles on, and its layout.
+    fn settle(c: &Config, rows: &[Row]) -> (f32, Vec<Placed>, Option<Rect>, bool) {
+        let mut s = 1.0f32;
+        loop {
+            let (placed, ink, fits) = place(c, rows, s, c.LineSpacing as f32, CY + c.TextOffsetY as f32, 0);
+            if fits || s < 0.25 {
+                return (s, placed, ink, fits);
+            }
+            s *= 0.94;
+        }
+    }
+
+    #[test]
+    fn placed_lines_lie_inside_the_circle() {
+        for c in configs() {
+            let (items, ls) = clock_rows(&c);
+            let rows = rows_from(&items, &ls);
+            let (s, placed, ink, fits) = settle(&c, &rows);
+            let big = c.ClockStyles.as_ref().unwrap()[0].Size;
+            if big > 120 && !fits {
+                continue; // too long a line even at the smallest scale: drawn anyway, like the C# version
+            }
+            assert!(fits, "{} align {} size {big} did not fit (scale {s})", c.ClockOrder, c.TextAlign);
+            assert!(ink.is_some());
+            for pl in &placed {
+                let b = bounds(&pl.path);
+                for (x, y) in [(b.left(), b.top()), (b.right(), b.top()), (b.left(), b.bottom()), (b.right(), b.bottom())] {
+                    let d = ((x - CX).powi(2) + (y - CY).powi(2)).sqrt();
+                    assert!(d <= FIT_R + 1.0, "{} align {}: corner ({x}, {y}) is {d} from the centre", c.ClockOrder, c.TextAlign);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn alignment_shares_one_edge() {
+        for c in configs().into_iter().filter(|c| c.TextAlign != 1) {
+            let (items, ls) = clock_rows(&c);
+            let rows = rows_from(&items, &ls);
+            let (_, placed, _, _) = settle(&c, &rows);
+            // the ink box of each line
+            let mut boxes: Vec<Option<Rect>> = Vec::new();
+            for pl in &placed {
+                if boxes.len() <= pl.line {
+                    boxes.resize(pl.line + 1, None);
+                }
+                boxes[pl.line] = Some(union(boxes[pl.line], bounds(&pl.path)));
+            }
+            let edges: Vec<f32> = boxes.iter().flatten().map(|r| if c.TextAlign == 0 { r.left() } else { r.right() }).collect();
+            for e in &edges {
+                assert!((e - edges[0]).abs() < 0.5, "{} align {}: edges {edges:?}", c.ClockOrder, c.TextAlign);
+            }
+        }
+    }
+
+    #[test]
+    fn label_above_is_centred_over_its_value() {
+        let c = Config { ClockStyles: Some(vec![style(ID_WATER, 80, TextEffect::None, true)]), ..Default::default() };
+        let seg = reading(&c, false, ID_WATER, &values(), &now());
+        assert_eq!(seg.above.as_deref(), Some("Coolant"));
+        assert_eq!(seg.text, "31°C");
+        let items = vec![seg];
+        let rows = rows_from(&items, &[vec![ID_WATER]]);
+        let (placed, _, fits) = place(&c, &rows, 1.0, 0.0, CY, 0);
+        assert!(fits);
+        assert_eq!(placed.len(), 2);
+        let (l, v) = (bounds(&placed[0].path), bounds(&placed[1].path));
+        assert!(l.bottom() <= v.top() + 1.0, "label above the value");
+        let (lc, vc) = ((l.left() + l.right()) / 2.0, (v.left() + v.right()) / 2.0);
+        assert!((lc - vc).abs() < 0.5, "label centre {lc}, value centre {vc}");
+        assert!((vc - CX).abs() < 0.5, "centred on the panel");
+    }
+
+    #[test]
+    fn reading_texts() {
+        let mut c = Config::default();
+        let st = |c: &Config, id| reading(c, false, id, &values(), &now()).text;
+        c.ClockStyles = Some(vec![ElementStyle { Id: ID_CPU_TEMP, Label: true, Fahrenheit: true, ..Default::default() }, ElementStyle { Id: ID_LOAD, Label: false, ..Default::default() }]);
+        assert_eq!(st(&c, ID_CPU_TEMP), "CPU: 135°F");
+        assert_eq!(st(&c, ID_LOAD), "43%");
+        assert_eq!(st(&c, ID_TIME), "20:58");
+        assert_eq!(st(&c, ID_DATE), "Tue 13 Oct");
+        // like .NET Math.Round: halves to even, and never "-0"
+        assert_eq!(deg(-0.4, false), "0°C");
+        assert_eq!(deg(31.5, false), "32°C");
+        assert_eq!(deg(32.5, false), "32°C");
+        assert_eq!(deg(32.6, false), "33°C");
+        assert_eq!(deg(32.5, true), "90°F");
+    }
+
+    #[test]
+    fn heat_colours() {
+        let c = |v| {
+            let k = heat(v, 25.0, 45.0).to_color_u8();
+            (k.red(), k.green(), k.blue())
+        };
+        assert_eq!(c(10.0), (0, 255, 255));
+        assert_eq!(c(35.0), (127, 255, 0));
+        assert_eq!(c(60.0), (255, 0, 0));
+    }
+
+    /// Effects never push ink outside the panel's circle by more than their padding.
+    #[test]
+    fn frames_render_with_every_effect() {
+        for c in configs().into_iter().step_by(7) {
+            let mut p = super::super::blank(0);
+            let (items, ls) = clock_rows(&c);
+            draw_readings(&mut p, &c, &rows_from(&items, &ls), c.LineSpacing as f32, CY, 0, false);
+            assert!(p.pixels().iter().any(|px| px.red() > 0), "something was drawn");
+            // corners of the square frame stay black (nothing outside the round panel)
+            for (x, y) in [(2u32, 2u32), (477, 2), (2, 477), (477, 477)] {
+                assert_eq!(p.pixel(x, y).unwrap().red(), 0);
+            }
+        }
+    }
+
+    /// Renders a typical clock face repeatedly: `cargo test --release -p ttlcd-core render_speed -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn render_speed() {
+        let mut c = Config { ShowTime: true, ShowDate: true, ShowWaterTemp: true, ShowCpuTemp: true, ShowCpuLoad: true, ..Default::default() };
+        c.ClockStyles = Some(vec![style(ID_WATER, 54, TextEffect::Glow, true)]);
+        c.TextEffect = TextEffect::Shadow;
+        let n = 120;
+        let t = std::time::Instant::now();
+        for _ in 0..n {
+            let mut p = super::super::blank(0x203040);
+            let (items, ls) = clock_rows(&c);
+            draw_readings(&mut p, &c, &rows_from(&items, &ls), c.LineSpacing as f32, CY, 0, false);
+        }
+        let ms = t.elapsed().as_secs_f64() * 1000.0 / n as f64;
+        println!("clock face: {ms:.2} ms per frame");
+        let t = std::time::Instant::now();
+        for _ in 0..n {
+            let mut p = super::super::blank(0x203040);
+            let mut o = c.clone();
+            o.OverlayTime = true;
+            o.OverlayCpuTemp = true;
+            o.OverlayWaterTemp = true;
+            draw_overlay(&mut p, &o, &values());
+        }
+        println!("overlay: {:.2} ms per frame", t.elapsed().as_secs_f64() * 1000.0 / n as f64);
+        // a face too big for the panel: shrunk step by step until it fits
+        c.ClockStyles = Some(vec![style(ID_TIME, 400, TextEffect::Glow, false), style(ID_DATE, 200, TextEffect::Outline, false)]);
+        c.ClockOrder = "0,1|2,3,4|".into();
+        let t = std::time::Instant::now();
+        for _ in 0..n {
+            let mut p = super::super::blank(0x203040);
+            let (items, ls) = clock_rows(&c);
+            draw_readings(&mut p, &c, &rows_from(&items, &ls), c.LineSpacing as f32, CY, 0, false);
+        }
+        println!("oversized face: {:.2} ms per frame", t.elapsed().as_secs_f64() * 1000.0 / n as f64);
     }
 }

@@ -1,8 +1,9 @@
 Package: ttlcd-studio
 Version: @VERSION@
-Architecture: all
+Architecture: amd64
 Maintainer: anatolijphp <anatolijphp@users.noreply.github.com>
-Depends: @CORE_DEPENDS@, libgtk-3-0 | libgtk-3-0t64, libglib2.0-0 | libglib2.0-0t64, libgdk-pixbuf-2.0-0 | libgdk-pixbuf2.0-0, libpango-1.0-0, libcairo2, libatk1.0-0 | libatk1.0-0t64
+Installed-Size: @SIZE@
+Depends: @DEPENDS@
 Recommends: libayatana-appindicator3-1
 Provides: ttlcd (= @VERSION@)
 Conflicts: ttlcd
@@ -11,13 +12,9 @@ Section: utils
 Priority: optional
 Homepage: https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD
 Description: TT LCD Studio window for the Thermaltake TH240 V2 Ultra (CL-W383) LCD
- GTK window: dashboard, live preview, display modes (image, GIF, colour,
- clock, Aura Sync, off), device and settings pages, idle picture. Complete on
- its own: it also contains everything in the ttlcd package (the ttlcd
- command, the systemd user service and the udev rule) and replaces it, so
- this one file installs from the Ubuntu App Center too.
- Bundles GTK# 3 (gtk-sharp3, LGPL-2.1) next to TTLcdStudio.exe, since Debian
- dropped that binding from its archives in 2023 (gone from Ubuntu since
- 25.10); only the native GTK3/GLib/Pango/Atk/Cairo libraries above are
- needed from the system, so this installs on any current Debian/Ubuntu,
- 26.04 included. See build.sh for where the bundled copy comes from.
+ Window with dashboard, live preview, display modes (image, GIF, colour,
+ clock, Aura Sync, off), device and settings pages and the idle picture,
+ plus a tray icon (libayatana-appindicator3). Complete on its own: it also
+ contains everything in the ttlcd package (the ttlcd command, the systemd
+ user service, the udev rule and the rescue tool) and replaces it, so this
+ one file installs from the Ubuntu App Center too.

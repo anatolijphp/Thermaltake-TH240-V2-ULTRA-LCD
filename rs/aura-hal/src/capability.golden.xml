@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<root>
+    <version>1</version>
+    <type>409600</type>
+    <device>
+        <name>TT LCD CL-W383</name>
+        <id>0</id>
+        <layout>
+            <led_count>8</led_count>
+            <size>
+                <width>8</width>
+                <height>1</height>
+            </size>
+            <led_name>
+                <led>LCD 1</led>
+                <led>LCD 2</led>
+                <led>LCD 3</led>
+                <led>LCD 4</led>
+                <led>LCD 5</led>
+                <led>LCD 6</led>
+                <led>LCD 7</led>
+                <led>LCD 8</led>
+            </led_name>
+        </layout>
+        <supported_effect>
+            <effect>
+                <name>Manual</name>
+                <id>0</id>
+                <synchronizable>0</synchronizable>
+                <customized_color>1</customized_color>
+                <speed_supported>0</speed_supported>
+                <direction_supported>0</direction_supported>
+            </effect>
+            <effect>
+                <name>Static</name>
+                <id>1</id>
+                <synchronizable>0</synchronizable>
+                <customized_color>1</customized_color>
+                <speed_supported>0</speed_supported>
+                <direction_supported>0</direction_supported>
+            </effect>
+            <effect>
+                <name>Breathing</name>
+                <id>2</id>
+                <synchronizable>1</synchronizable>
+                <customized_color>1</customized_color>
+                <speed_supported>1<levels>3</levels><default>1</default></speed_supported>
+                <direction_supported>0</direction_supported>
+            </effect>
+            <effect>
+                <name>Strobing</name>
+                <id>3</id>
+                <synchronizable>1</synchronizable>
+                <customized_color>1</customized_color>
+                <speed_supported>1<levels>3</levels><default>1</default></speed_supported>
+                <direction_supported>0</direction_supported>
+            </effect>
+            <effect>
+                <name>Color cycle</name>
+                <id>4</id>
+                <synchronizable>1</synchronizable>
+                <customized_color>0</customized_color>
+                <speed_supported>1<levels>3</levels><default>1</default></speed_supported>
+                <direction_supported>0</direction_supported>
+            </effect>
+            <effect>
+                <name>Rainbow</name>
+                <id>5</id>
+                <synchronizable>1</synchronizable>
+                <customized_color>0</customized_color>
+                <speed_supported>1<levels>3</levels><default>1</default></speed_supported>
+                <direction_supported>0</direction_supported>
+            </effect>
+            <effect>
+                <name>Default</name>
+                <id>255</id>
+                <synchronizable>0</synchronizable>
+                <customized_color>0</customized_color>
+                <speed_supported>0</speed_supported>
+                <direction_supported>0</direction_supported>
+            </effect>
+        </supported_effect>
+        <model>Thermaltake CL-W383 LCD</model>
+    </device>
+</root>

@@ -1,3 +1,0 @@
-#!/bin/sh
-# TT LCD Studio (GTK window over Mono).
-exec mono /usr/lib/ttlcd/TTLcdStudio.exe "$@"

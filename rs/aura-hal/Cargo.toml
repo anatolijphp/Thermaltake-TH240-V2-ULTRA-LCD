@@ -11,4 +11,12 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Memory", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Ole", "Win32_Foundation"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
+    "Win32_System_SystemInformation",
+] }

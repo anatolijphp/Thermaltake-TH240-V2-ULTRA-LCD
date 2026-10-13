@@ -11,10 +11,14 @@ flash on the board. This folder has the firmware that runs on our cooler today, 
 | `hardware_boot_pins.jpg` | Where to short the flash pins to force the chip into ROM recovery mode. |
 | `SHA256SUMS.txt` | Checksums of the files above. |
 
-Tools (built by `build.cmd` from `rescue/` into `build\windows\app\firmware\`; the installer puts them in the installed
-`firmware\` folder):
-- `ttrescue.exe`: reads, writes and verifies the flash through the chip's recovery mode. Source: `rescue/Rescue.cs`.
-- `PatchPanel.exe` (build folder only): rebuilds `lx800_tt021panel.bin` from `make_fix.bin`. Source: `rescue/PatchPanel.cs`.
+Tools (Rust, built by `build.cmd` / `./build.sh` from `rs/rescue` and `rs/patchpanel`):
+- `ttrescue` (`ttrescue.exe`): reads, writes and verifies the flash through the chip's recovery mode.
+  - Windows: in the installed app's `firmware\` folder and in `build\windows\app\firmware\`.
+  - Linux: in `/usr/lib/ttlcd/firmware/` (both .deb packages), next to these firmware files. It talks to the chip
+    through the kernel's SCSI pass-through (`SG_IO`) and needs root. **The Linux path has not been tried on the
+    hardware yet**; the Windows one is a port of the C# tool (`rescue/Rescue.cs`) that did the 2026-10-09 rescue.
+- `PatchPanel.exe` (Windows build folder only): rebuilds `lx800_tt021panel.bin` from `make_fix.bin`. Every build checks
+  that its output is byte-identical to the shipped `lx800_tt021panel.bin`.
 
 ## When do you need this?
 
@@ -39,7 +43,7 @@ As long as the LCD enumerates, TT LCD Studio drives it and nothing here is neede
 
 ## Burning it (about 5 minutes)
 
-You need a Windows PC, a pair of tweezers (or a wire), and the cooler's LCD USB cable.
+You need a Windows PC (or Linux, untested so far, see step 3), a pair of tweezers (or a wire), and the cooler's LCD USB cable.
 
 1. **Unplug the LCD's USB cable** (or power the PC off).
 2. **Force ROM recovery mode.** Open the pump head and find the 8-pin SPI NOR chip on the LCD board. Orient the board
@@ -54,7 +58,15 @@ You need a Windows PC, a pair of tweezers (or a wire), and the cooler's LCD USB 
    ttrescue.exe write lx800_tt021panel.bin
    ```
    It uploads `FA93_musb.bin` into the chip's RAM, writes the image to flash offset 0, then reads it back and compares.
-   Expect `verify OK: 589824 bytes match`. Everything is logged to `rescue.log` next to `ttrescue.exe`.
+   Expect `verify OK: 589824 bytes match`. Everything is logged to `rescue.log` next to `ttrescue.exe` (or in the
+   current folder when that one isn't writable).
+
+   On Linux (with the `ttlcd` or `ttlcd-studio` package; **not yet tested on hardware**):
+   ```
+   cd /tmp && sudo /usr/lib/ttlcd/firmware/ttrescue write /usr/lib/ttlcd/firmware/lx800_tt021panel.bin
+   ```
+   It finds the device under `/sys/bus/scsi/devices` (vendor `W55FA93`, model `DEV TOOL`) and opens its `/dev/sg*`
+   node, or `/dev/sd*` when the `sg` module isn't loaded. The log and read-back go to the current folder.
 4. Unplug and replug the USB cable (no short this time). The LCD enumerates as **`1A2C:151D`** and lights up.
 5. Start TT LCD Studio.
    - The boot animation area is empty after a rescue. That's normal.
@@ -62,7 +74,7 @@ You need a Windows PC, a pair of tweezers (or a wire), and the cooler's LCD USB 
 
 ### Making a backup first (recommended)
 
-In recovery mode, `ttrescue.exe flash_dump.bin` reads the whole 16 MB flash into `flash_dump.bin` without
+In recovery mode, `ttrescue.exe flash_dump.bin` (Linux: `sudo .../ttrescue flash_dump.bin`) reads the whole 16 MB flash into `flash_dump.bin` without
 writing anything.
 
 ### Alternative: Nuvoton TurboWriter
@@ -78,6 +90,8 @@ From the repository root, after `build.cmd`:
 ```
 build\windows\app\firmware\PatchPanel.exe firmware\make_fix.bin firmware\lx800_tt021panel.bin
 ```
+On Linux, `build/rs-target/x86_64-unknown-linux-gnu/release/PatchPanel` after `./build.sh` does the same (the build
+runs it and stops if the result differs; `cargo test -p ttlcd-patchpanel` checks it too).
 It checks the code layout before patching and prints how many bytes changed. Compare the result with `SHA256SUMS.txt`.
 
 ## Credits and licences

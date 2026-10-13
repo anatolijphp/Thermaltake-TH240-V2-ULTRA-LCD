@@ -13,7 +13,11 @@ pub struct Fonts {
     db: fontdb::Database,
     faces: Mutex<HashMap<(String, bool, bool), Option<Arc<Face>>>>,
     files: Mutex<HashMap<std::path::PathBuf, Arc<Vec<u8>>>>,
+    paths: Mutex<HashMap<PathKey, Option<Arc<Path>>>>,
 }
+
+/// (family, bold, italic, size bits, text)
+type PathKey = (String, bool, bool, u32, String);
 
 /// Sans-serif fallbacks for a family the system doesn't have ("Segoe UI" on Linux, as fontconfig would pick).
 const FALLBACK: &[&str] = &["Segoe UI", "DejaVu Sans", "Ubuntu", "Noto Sans", "Liberation Sans", "Cantarell", "Arial"];
@@ -27,7 +31,7 @@ pub fn fonts() -> &'static Fonts {
         if let Some(local) = std::env::var_os("LOCALAPPDATA") {
             db.load_fonts_dir(std::path::PathBuf::from(local).join("Microsoft\\Windows\\Fonts")); // per-user installs
         }
-        Fonts { db, faces: Mutex::new(HashMap::new()), files: Mutex::new(HashMap::new()) }
+        Fonts { db, faces: Mutex::new(HashMap::new()), files: Mutex::new(HashMap::new()), paths: Mutex::new(HashMap::new()) }
     })
 }
 
@@ -85,6 +89,7 @@ impl Fonts {
         found
     }
 
+    #[cfg(target_os = "linux")]
     fn load_file(&self, p: &std::path::Path, index: u32) -> Option<Arc<Face>> {
         let data = {
             let mut files = self.files.lock().unwrap();
@@ -155,6 +160,28 @@ impl Fonts {
         if text.is_empty() {
             return None;
         }
+        // Shaped outlines are cached at the origin (the clock's texts change once a minute; the shrink-to-fit loop
+        // and every frame after it ask for the same ones again) and moved into place.
+        let key = (family.to_owned(), bold, italic, size.to_bits(), text.to_owned());
+        let cached = self.paths.lock().unwrap().get(&key).cloned();
+        let p = match cached {
+            Some(p) => p,
+            None => {
+                let p = self.shape_path(family, bold, italic, size, text).map(Arc::new);
+                let mut cache = self.paths.lock().unwrap();
+                if cache.len() >= 512 {
+                    cache.clear();
+                }
+                cache.insert(key, p.clone());
+                p
+            }
+        }?;
+        (*p).clone().transform(tiny_skia::Transform::from_translate(x, top))
+    }
+
+    /// The text's outline with its line top-left at (0, 0).
+    fn shape_path(&self, family: &str, bold: bool, italic: bool, size: f32, text: &str) -> Option<Path> {
+        let (x, top) = (0.0f32, 0.0f32);
         let primary = self.face(family, bold, italic)?;
         let pface = rustybuzz::Face::from_slice(&primary.data, primary.index)?;
         let ascent = pface.tables().os2.map(|o| o.windows_ascender() as f32).filter(|a| *a > 0.0).unwrap_or(pface.ascender() as f32);
@@ -164,11 +191,13 @@ impl Fonts {
         for (face, run) in self.runs(&primary, bold, text) {
             let Some(rf) = rustybuzz::Face::from_slice(&face.data, face.index) else { continue };
             let k = size / rf.units_per_em() as f32;
+            // italic asked for but the family has none: slanted like GDI+'s (and fontconfig's) simulated italic
+            let skew = if italic && !rf.is_italic() && !rf.is_oblique() { SYNTHETIC_ITALIC } else { 0.0 };
             let mut buf = rustybuzz::UnicodeBuffer::new();
             buf.push_str(&run);
             let glyphs = rustybuzz::shape(&rf, &[], buf);
             for (info, pos) in glyphs.glyph_infos().iter().zip(glyphs.glyph_positions()) {
-                let mut ob = Outline { pb: &mut pb, k, x: pen + pos.x_offset as f32 * k, y: baseline - pos.y_offset as f32 * k };
+                let mut ob = Outline { pb: &mut pb, k, skew, x: pen + pos.x_offset as f32 * k, y: baseline - pos.y_offset as f32 * k };
                 rf.outline_glyph(ttf_parser::GlyphId(info.glyph_id as u16), &mut ob);
                 pen += pos.x_advance as f32 * k;
             }
@@ -178,7 +207,10 @@ impl Fonts {
 
     /// Splits text into runs drawn with the primary face, or a fallback face for characters it lacks.
     fn runs(&self, primary: &Arc<Face>, bold: bool, text: &str) -> Vec<(Arc<Face>, String)> {
-        let has = |f: &Face, c: char| rustybuzz::Face::from_slice(&f.data, f.index).is_some_and(|ff| ff.glyph_index(c).is_some());
+        // a glyph counts only with an outline: colour-emoji fonts map digits etc. to bitmaps, which a path can't draw
+        let has = |f: &Face, c: char| {
+            rustybuzz::Face::from_slice(&f.data, f.index).is_some_and(|ff| ff.glyph_index(c).is_some_and(|g| ff.outline_glyph(g, &mut NoOutline).is_some()))
+        };
         let mut fb: Option<Vec<Arc<Face>>> = None;
         let mut out: Vec<(Arc<Face>, String)> = Vec::new();
         for c in text.chars() {
@@ -218,17 +250,32 @@ impl Fonts {
     }
 }
 
+/// Slant of a simulated italic (x shift per unit of height above the baseline), as FreeType/fontconfig use.
+const SYNTHETIC_ITALIC: f32 = 0.2;
+
 struct Outline<'a> {
     pb: &'a mut PathBuilder,
     k: f32,
+    skew: f32,
     x: f32,
     y: f32,
 }
 
 impl Outline<'_> {
     fn p(&self, x: f32, y: f32) -> (f32, f32) {
-        (self.x + x * self.k, self.y - y * self.k)
+        (self.x + (x + y * self.skew) * self.k, self.y - y * self.k)
     }
+}
+
+/// Only asks whether a glyph has an outline.
+struct NoOutline;
+
+impl ttf_parser::OutlineBuilder for NoOutline {
+    fn move_to(&mut self, _: f32, _: f32) {}
+    fn line_to(&mut self, _: f32, _: f32) {}
+    fn quad_to(&mut self, _: f32, _: f32, _: f32, _: f32) {}
+    fn curve_to(&mut self, _: f32, _: f32, _: f32, _: f32, _: f32, _: f32) {}
+    fn close(&mut self) {}
 }
 
 impl ttf_parser::OutlineBuilder for Outline<'_> {

@@ -172,7 +172,7 @@ impl DashState {
         let w_ok = readings::water_valid(water);
         let (ct, ram, load) = (sensors::cpu_temp_c(), sensors::ram_percent(), sensors::cpu_percent());
         Dash {
-            coolant: Gauge { text: if w_ok { format!("{}°", water.round()) } else { "--".into() }, frac: if w_ok { (water - 20.0) / 30.0 } else { 0.0 } },
+            coolant: Gauge { text: if w_ok { format!("{}°", water.round_ties_even() + 0.0) } else { "--".into() }, frac: if w_ok { (water - 20.0) / 30.0 } else { 0.0 } },
             cpu_temp: Gauge { text: if ct > 0 { format!("{ct}°") } else { "n/a".into() }, frac: if ct > 0 { (ct as f64 - 20.0) / 75.0 } else { 0.0 } },
             cpu_load: Gauge { text: format!("{load}%"), frac: load as f64 / 100.0 },
             ram: Gauge { text: format!("{ram}%"), frac: ram as f64 / 100.0 },

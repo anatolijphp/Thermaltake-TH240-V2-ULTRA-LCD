@@ -426,3 +426,116 @@ fn led_at(leds: &[Rgb], f: f64) -> Rgb {
     let (a, b) = (leds[i0], leds[i1]);
     ((a.0 + (b.0 - a.0) * k).floor(), (a.1 + (b.1 - a.1) * k).floor(), (a.2 + (b.2 - a.2) * k).floor())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A TTAS block as the plugin writes it.
+    fn block(seq: i32, effect: i32, leds: &[u32], speed: i32, sync_ms: i64) -> Vec<u8> {
+        let mut b = vec![0u8; SIZE];
+        b[0..4].copy_from_slice(&MAGIC.to_le_bytes());
+        b[4..8].copy_from_slice(&seq.to_le_bytes());
+        b[8..12].copy_from_slice(&effect.to_le_bytes());
+        b[12..16].copy_from_slice(&(leds.len() as i32).to_le_bytes());
+        b[16..20].copy_from_slice(&speed.to_le_bytes());
+        b[24..32].copy_from_slice(&sync_ms.to_le_bytes());
+        b[32..40].copy_from_slice(&crate::util::dotnet_ticks_now().to_le_bytes());
+        for (i, c) in leds.iter().enumerate() {
+            b[40 + i * 4..44 + i * 4].copy_from_slice(&c.to_le_bytes());
+        }
+        b
+    }
+
+    const LEDS: [u32; 8] = [0x0000FF, 0x00FF00, 0xFF0000, 0x00FFFF, 0xFF00FF, 0xFFFF00, 0x808080, 0xFFFFFF];
+
+    #[test]
+    fn parses_the_block() {
+        let b = block(42, 2, &LEDS, 1, 123_456);
+        let s = Snapshot::parse(&b).unwrap();
+        assert_eq!((s.seq, s.effect, s.led_count, s.speed, s.sync_ms), (42, 2, 8, 1, 123_456));
+        assert_eq!(s.colors[2], 0xFF0000);
+        assert!(s.age_secs() < 5.0);
+        let mut closed = b.clone();
+        closed[0..4].fill(0);
+        assert!(Snapshot::parse(&closed).is_none());
+        assert!(Snapshot::parse(&b[..SIZE - 1]).is_none());
+    }
+
+    fn brightness(p: &Pixmap) -> u64 {
+        p.pixels().iter().map(|c| c.red() as u64 + c.green() as u64 + c.blue() as u64).sum()
+    }
+
+    /// Frames at chosen Aura times: Synchronize() moves the clock base, so sync_ms = t gives that time.
+    fn frames(effect: i32, n: usize) -> Vec<(Pixmap, String)> {
+        let mut v = Visualiser::default();
+        (0..n)
+            .map(|k| {
+                let s = Snapshot::parse(&block(k as i32 * 2, effect, &LEDS, 2, 1 + k as i64 * 33)).unwrap();
+                v.render(Some(&s))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn visualiser_draws_and_animates() {
+        for (effect, name) in [(0, "Manual"), (1, "Static"), (2, "Breathing"), (4, "Color cycle"), (5, "Rainbow"), (0xFF, "Default")] {
+            let f = frames(effect, 12);
+            assert_eq!(f[11].1, format!("Aura Sync · {name}"));
+            assert!(brightness(&f[11].0) > 0, "{name}: frame is black");
+            assert_ne!(f[8].0.data(), f[11].0.data(), "{name}: frames don't change");
+        }
+    }
+
+    #[test]
+    fn strobing_goes_dark_and_bright() {
+        // speed 2 = 2 s per cycle, 4 flashes: on for 0.25 s, off for 0.25 s
+        let f = frames(3, 12); // t = 0 .. 0.36 s
+        assert!(brightness(&f[7].0) > 0);
+        let mut v = Visualiser::default();
+        let s = Snapshot::parse(&block(0, 3, &LEDS, 2, 300)).unwrap(); // t = 0.3 s: off
+        let (dark, _) = v.render(Some(&s));
+        assert_eq!(brightness(&dark), 0, "nothing drawn while off (empty feedback buffer)");
+        assert_eq!(f[0].1, "Aura Sync · Strobing");
+    }
+
+    #[test]
+    fn waiting_screen_without_data() {
+        let (p, st) = Visualiser::default().render(None);
+        assert!(st.starts_with("Waiting for"));
+        assert!(brightness(&p) > 0, "the message is drawn");
+    }
+
+    #[test]
+    fn colour_helpers() {
+        let c = (200.0, 100.0, 50.0);
+        assert_eq!(scale(c, 0.5), (100.0, 50.0, 25.0));
+        assert_eq!(scale(c, 2.0), c);
+        assert_eq!(hsv(0.0, 1.0), (255.0, 0.0, 0.0));
+        assert_eq!(hsv(1.0 / 3.0, 1.0), (0.0, 255.0, 0.0));
+        assert_eq!(led_at(&[(0.0, 0.0, 0.0), (100.0, 200.0, 50.0)], 0.25), (50.0, 100.0, 25.0));
+    }
+
+    /// Writes frames to $TTLCD_DUMP/aura-<effect>-<k>.png for a look:
+    /// `TTLCD_DUMP=/tmp/x cargo test -p ttlcd-core aura_dump -- --ignored`
+    #[test]
+    #[ignore]
+    fn aura_dump() {
+        let Some(dir) = std::env::var_os("TTLCD_DUMP") else { return };
+        for effect in [0, 2, 5] {
+            for (k, (p, _)) in frames(effect, 90).iter().enumerate().filter(|(k, _)| k % 30 == 29) {
+                let img = image::RgbaImage::from_raw(p.width(), p.height(), p.data().to_vec()).unwrap(); // opaque
+                img.save(std::path::Path::new(&dir).join(format!("aura-{effect}-{k}.png"))).unwrap();
+            }
+        }
+    }
+
+    /// One frame of the visualiser costs: `cargo test --release -p ttlcd-core aura_speed -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn aura_speed() {
+        let t = std::time::Instant::now();
+        let f = frames(5, 60);
+        println!("visualiser: {:.2} ms per frame", t.elapsed().as_secs_f64() * 1000.0 / f.len() as f64);
+    }
+}

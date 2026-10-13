@@ -2,19 +2,30 @@ name: build
 
 on:
   push:
-    branches: [main, 'ci/**']
+    branches: [main, 'ci/**', rust-port]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
 
+# Both jobs build with the toolchain rs/fetch.* downloads into tools/ (Rust 1.98.0, llvm-mingw; pinned + SHA256),
+# not the runner's preinstalled Rust, so CI proves a clean machine needs nothing installed. The download cache only
+# saves time: every archive is checked against its pinned hash again after restore.
 jobs:
   windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Same compiler as on a plain Windows install: .NET Framework 4.8 csc (C# 5). No SDK, no packages.
-      # Builds the app, the Aura plugin and the rescue tools into build\windows\app, and build\windows\TTLcdStudio-Setup.exe.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            tools/dl/rs
+            tools/cargo-home/registry
+          key: rs-windows-${{ hashFiles('rs/fetch.cmd', 'rs/Cargo.lock') }}
+          restore-keys: rs-windows-
+
+      # build\windows\app (the installed layout) and build\windows\TTLcdStudio-Setup.exe; also checks that PatchPanel
+      # rebuilds firmware\lx800_tt021panel.bin byte for byte
       - name: Build
         shell: cmd
         run: build.cmd
@@ -28,12 +39,46 @@ jobs:
             if ($actual -ne $hash) { throw "checksum mismatch: $name" }
           }
 
+      - name: Layout and CLI smoke test
+        shell: pwsh
+        run: |
+          $app = 'build/windows/app'
+          if (Test-Path "$app/WebView2Loader.dll") { throw "WebView2Loader.dll must not ship (Studio has its own loader)" }
+          if ((& tools/llvm-mingw/bin/llvm-objdump.exe -p "$app/TTLcdStudio.exe") -match 'DLL Name: WebView2Loader.dll') { throw "TTLcdStudio.exe imports WebView2Loader.dll" }
+          foreach ($f in 'ttlcd.exe','TTLcdStudio.exe','TTLcdAura.dll','TTLcdAura64.dll','driver/MttVDD.inf','driver/MttVDD.dll','driver/mttvdd.cat',
+                         'firmware/ttrescue.exe','firmware/PatchPanel.exe','firmware/lx800_tt021panel.bin','firmware/FA93_musb.bin','firmware/README.md') {
+            if (-not (Test-Path "$app/$f")) { throw "missing in build/windows/app: $f" }
+          }
+          & "$app/ttlcd.exe" version
+          if ($LASTEXITCODE -ne 0) { throw "ttlcd version failed" }
+          & "$app/ttlcd.exe" probe   # no cooler on the runner: reports that, must not crash
+          New-Item -ItemType Directory -Force shots | Out-Null
+          & "$app/ttlcd.exe" render shots/windows-frame-clock.jpg Clock
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path shots/windows-frame-clock.jpg)) { throw "ttlcd render failed" }
+          & "$app/ttlcd.exe" render shots/windows-frame-color.jpg Color
+          if ($LASTEXITCODE -ne 0) { throw "ttlcd render Color failed" }
+          $global:LASTEXITCODE = 0
+
+      # the Aura plugin as ASUS LightingService uses it (COM class factory, HAL interface, shared memory), both builds
+      - name: Aura plugin self-test
+        shell: cmd
+        run: |
+          set PATH=%CD%\tools\rust\bin;%CD%\tools\llvm-mingw\bin;%PATH%
+          set CARGO_HOME=%CD%\tools\cargo-home
+          cd rs
+          cargo build --release --locked -p ttlcd-aura-hal --example probe --target i686-pc-windows-gnullvm || exit /b 1
+          cargo build --release --locked -p ttlcd-aura-hal --example probe --target x86_64-pc-windows-gnullvm || exit /b 1
+          cd ..
+          build\rs-target\i686-pc-windows-gnullvm\release\examples\probe.exe build\windows\app\TTLcdAura.dll || exit /b 1
+          build\rs-target\x86_64-pc-windows-gnullvm\release\examples\probe.exe build\windows\app\TTLcdAura64.dll || exit /b 1
+
       - name: Installer smoke test (silent install + uninstall)
         shell: pwsh
         run: |
+          if (-not (Test-Path build/windows/TTLcdStudio-Setup.exe)) { throw "build/windows/TTLcdStudio-Setup.exe was not built" }
           $dir = Join-Path $env:RUNNER_TEMP 'TT LCD Studio'
           Start-Process build/windows/TTLcdStudio-Setup.exe -ArgumentList "/S `"/D=$dir`"" -Wait
-          foreach ($f in 'ttlcd.exe','TTLcdStudio.exe','TTLcdAura.dll','Uninstall.exe','driver/MttVDD.inf','firmware/ttrescue.exe','firmware/lx800_tt021panel.bin') {
+          foreach ($f in 'ttlcd.exe','TTLcdStudio.exe','TTLcdAura.dll','TTLcdAura64.dll','Uninstall.exe','driver/MttVDD.inf','firmware/ttrescue.exe','firmware/lx800_tt021panel.bin') {
             if (-not (Test-Path (Join-Path $dir $f))) { throw "missing after install: $f" }
           }
           Start-Process (Join-Path $dir 'Uninstall.exe') -ArgumentList '/uninstall /S' -Wait
@@ -45,16 +90,22 @@ jobs:
         shell: pwsh
         run: Compress-Archive build/windows/app/* build/windows/TTLcdStudio-portable.zip
 
-      # the WPF window rendered off-screen, to compare with the Linux (GTK) screenshots
+      # Studio's window (WebView2; the runner has the runtime) for each page, to compare with the Linux screenshots
       - name: Screenshots
         shell: pwsh
         run: |
-          New-Item -ItemType Directory shots | Out-Null
-          foreach ($p in 'dashboard','modes','device','settings') {
-            Start-Process build/windows/app/TTLcdStudio.exe -ArgumentList "--screenshot `"$PWD/shots/windows-$p.png`" $p" -Wait
+          New-Item -ItemType Directory -Force shots | Out-Null
+          $env:TTLCD_SHOT_HEIGHT = '1300'
+          $env:TTLCD_NO_DEVICE = '1'
+          foreach ($p in 'dashboard','modes:Clock','modes:Image','modes:Video','device','settings','idle') {
+            $png = "$PWD/shots/windows-$($p -replace ':','_').png"
+            $proc = Start-Process build/windows/app/TTLcdStudio.exe -ArgumentList "--screenshot `"$png`" $p" -PassThru
+            if (-not $proc.WaitForExit(120000)) { $proc.Kill(); throw "screenshot $p timed out" }
+            if (-not (Test-Path $png)) { throw "no screenshot for $p" }
           }
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: screenshots-windows
           path: shots/
@@ -67,26 +118,48 @@ jobs:
             build/windows/TTLcdStudio-portable.zip
 
   linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
-      # Mono's C# compiler builds the same sources (build.sh takes the file list from build.cmd). GTK# itself
-      # (gtk-sharp3) isn't installed here: build.sh fetches and bundles it straight from Ubuntu's archive (pinned
-      # version + SHA256, see build.sh), since the system package was dropped from Debian/Ubuntu in 2023.
-      - name: Install Mono
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq mono-devel >/dev/null
+      - uses: actions/cache@v4
+        with:
+          path: |
+            tools/dl/rs
+            tools/cargo-home/registry
+          key: rs-linux-${{ hashFiles('rs/fetch.sh', 'rs/Cargo.lock') }}
+          restore-keys: rs-linux-
 
+      # Runtime libraries only (what an Ubuntu desktop already has): rs/fetch.sh links against them through
+      # pkg-config stubs, so no -dev packages. cc is on the runner (a machine without it gets Zig from fetch.sh).
+      # ./build.sh builds the .debs and the tarball, and cross-builds the Windows app as a check.
       - name: Build
-        run: ./build.sh
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libwebkit2gtk-4.1-0 libgtk-3-0t64 >/dev/null
+          ./build.sh
+
+      - name: Unit tests (PatchPanel byte identity, rescue protocol)
+        run: |
+          export PATH="$PWD/tools/rust/bin:$PATH" CARGO_HOME="$PWD/tools/cargo-home"
+          cargo test --manifest-path rs/Cargo.toml --release --locked -p ttlcd-patchpanel -p ttlcd-rescue
+
+      - name: Check firmware checksums
+        run: cd firmware && sha256sum -c SHA256SUMS.txt
+
+      - name: Inspect packages
+        run: |
+          for d in build/linux/*.deb; do echo "== $d"; dpkg-deb -I "$d"; dpkg-deb -c "$d"; done
 
       # A clean Ubuntu with nothing but the .deb and its dependencies: proves the package installs and the
-      # renderer works there (the cooler itself isn't attached to CI).
+      # renderer works there (the cooler itself isn't attached to CI). Then ttlcd-studio over it, and every
+      # Studio page rendered under Xvfb.
       - name: Package test (clean Ubuntu 24.04)
         run: |
           docker run --rm -v "$PWD/build/linux:/pkg" ubuntu:24.04 sh -ec '
             apt-get update -qq
-            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd_*_all.deb >/dev/null
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd_*_amd64.deb >/dev/null
+            ttlcd version
             ttlcd >/dev/null || true
             ttlcd render /tmp/clock.jpg Clock
             ttlcd render /tmp/colour.jpg Color
@@ -94,18 +167,23 @@ jobs:
             ttlcd config | grep -q "Mode = Clock"
             ttlcd probe || true
             test -s /tmp/clock.jpg && test -f /lib/udev/rules.d/60-ttlcd.rules && test -f /usr/lib/systemd/user/ttlcd.service
-            # ttlcd-studio bundles GTK# itself, so it installs with just the native GTK3/glib/pango/atk/cairo libs.
-            # It contains and replaces ttlcd: installing it over ttlcd must keep the ttlcd command, unit and rule.
-            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd-studio_*_all.deb xvfb xauth fonts-ubuntu >/dev/null
+            test -x /usr/lib/ttlcd/firmware/ttrescue && test -f /usr/lib/ttlcd/firmware/FA93_musb.bin
+            (cd /usr/lib/ttlcd/firmware && sha256sum -c SHA256SUMS.txt --ignore-missing)
+            # ttlcd-studio contains and replaces ttlcd: installing it over ttlcd must keep the command, unit and rule
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd-studio_*_amd64.deb xvfb xauth fonts-ubuntu dbus-x11 >/dev/null
             ! dpkg -s ttlcd 2>/dev/null | grep -q "^Status: install ok"
             ttlcd render /tmp/clock2.jpg Clock && test -s /tmp/clock2.jpg
             test -f /lib/udev/rules.d/60-ttlcd.rules && test -f /usr/lib/systemd/user/ttlcd.service
             mkdir -p /pkg/shots
+            cp /tmp/clock.jpg /pkg/shots/linux-frame-clock.jpg
+            export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 LIBGL_ALWAYS_SOFTWARE=1 TTLCD_SHOT_HEIGHT=1300 TTLCD_NO_DEVICE=1
             for p in dashboard modes:Clock modes:Image device settings idle; do
-              xvfb-run -a -s "-screen 0 1400x1400x24" env TTLCD_SHOT_HEIGHT=1300 ttlcd-studio --screenshot /pkg/shots/linux-$(echo $p | tr : _).png $p
+              timeout 120 xvfb-run -a -s "-screen 0 1400x1400x24" dbus-launch --exit-with-session \
+                ttlcd-studio --screenshot /pkg/shots/linux-$(echo $p | tr : _).png $p
             done
-            xvfb-run -a -s "-screen 0 1400x1400x24" env TTLCD_SHOT_HEIGHT=1300 TTLCD_SHOT_SELECT=ClkItems:0 ttlcd-studio --screenshot /pkg/shots/linux-modes_Clock_style.png modes:Clock
-            test -s /pkg/shots/linux-dashboard.png
+            TTLCD_SHOT_SELECT=ClkItems:0 timeout 120 xvfb-run -a -s "-screen 0 1400x1400x24" dbus-launch --exit-with-session \
+              ttlcd-studio --screenshot /pkg/shots/linux-modes_Clock_style.png modes:Clock
+            for p in dashboard modes_Clock modes_Image device settings idle; do test -s /pkg/shots/linux-$p.png; done
           '
 
       # The App Center case: only the ttlcd-studio .deb, on a clean system, must install and bring the CLI along.
@@ -113,10 +191,10 @@ jobs:
         run: |
           docker run --rm -v "$PWD/build/linux:/pkg" ubuntu:24.04 sh -ec '
             apt-get update -qq
-            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd-studio_*_all.deb >/dev/null
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd-studio_*_amd64.deb >/dev/null
             ttlcd render /tmp/clock.jpg Clock && test -s /tmp/clock.jpg
             test -f /lib/udev/rules.d/60-ttlcd.rules && test -f /usr/lib/systemd/user/ttlcd.service
-            test -x /usr/bin/ttlcd-studio && test -f /usr/lib/ttlcd/TTLcdStudio.exe
+            test -x /usr/bin/ttlcd-studio && test -f /usr/share/applications/ttlcd-studio.desktop
           '
 
       - uses: actions/upload-artifact@v4
@@ -131,38 +209,6 @@ jobs:
           path: |
             build/linux/*.deb
             build/linux/*.tar.gz
-
-  # Rust port (proof of concept, rs/): built with the toolchain rs/fetch.* downloads into tools/ (pinned + SHA256),
-  # not the runner's preinstalled Rust, so CI proves a clean machine needs nothing installed. Not released yet.
-  rust:
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-24.04]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build (Windows)
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: rs\build.cmd
-
-      # runtime libraries only (what an Ubuntu desktop already has); rs/fetch.sh links against them via pkg-config stubs
-      - name: Build (Linux, plus the Windows exe cross-linked with llvm-mingw)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 libgtk-3-0t64
-          sh rs/build.sh
-
-      - name: Smoke test
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = Windows ]; then build/windows/rs/ttlcd-rs.exe list; else build/linux/rs/ttlcd-rs list; fi
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rust-${{ runner.os }}
-          path: build/*/rs/
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

@@ -178,7 +178,7 @@ fn read_temp(t: &mut Temp) -> i32 {
         return -1; // stale: helper stopped
     }
     let c = f32::from_bits(v.read_i32(4) as u32);
-    if c > 0.0 && c < 150.0 { c.round() as i32 } else { -1 }
+    if c > 0.0 && c < 150.0 { c.round_ties_even() as i32 } else { -1 }
 }
 
 #[cfg(not(any(windows, target_os = "linux")))]
