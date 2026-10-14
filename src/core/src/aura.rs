@@ -244,16 +244,9 @@ impl Visualiser {
         (if self.sync_base > 0 { self.sync_base as f64 + (local - self.sync_local) } else { local }) / 1000.0
     }
 
-    /// The frame and a status line ("Aura Sync · Breathing").
-    pub fn render(&mut self, s: Option<&Snapshot>) -> (Pixmap, String) {
-        let Some(s) = s else {
-            let linux = cfg!(target_os = "linux");
-            let mut p = render::blank(0);
-            let msg = if linux { "Waiting for\narmory-crated / Aura Sync" } else { "Waiting for\nArmoury Crate / Aura Sync" };
-            render::text_block(&mut p, msg, "Segoe UI", false, 24.0, rgb(0xFFFFFF), tiny_skia::Rect::from_xywh(0.0, 0.0, 480.0, 480.0).unwrap());
-            let st = if linux { "Waiting for armory-crated (Aura Sync service not running)" } else { "Waiting for Armoury Crate (Aura plugin not active)" };
-            return (p, st.into());
-        };
+    /// The LEDs' colours right now: the plugin's colours with the effect (Breathing, Strobing, Rainbow, ...)
+    /// applied at Aura time; with the effect's name and that time.
+    pub fn effect_leds(&mut self, s: &Snapshot) -> (Vec<Rgb>, f64, &'static str) {
         let n = s.led_count.clamp(1, 64) as usize;
         let mut leds: Vec<Rgb> = s.colors[..n].iter().map(|c| from_aura(*c)).collect();
         let t = self.now(s);
@@ -290,6 +283,29 @@ impl Visualiser {
             1 => "Static",
             _ => "Manual",
         };
+        (leds, t, name)
+    }
+
+    /// The LEDs' colours (effect applied) at `k` evenly spaced points along the strip, as 0..255 RGB.
+    pub fn lights(&mut self, s: &Snapshot, k: usize) -> Vec<(f32, f32, f32)> {
+        let (leds, _, _) = self.effect_leds(s);
+        (0..k).map(|i| {
+            let c = led_at(&leds, if k > 1 { i as f64 / (k - 1) as f64 } else { 0.0 });
+            (c.0 as f32, c.1 as f32, c.2 as f32)
+        }).collect()
+    }
+
+    /// The frame and a status line ("Aura Sync · Breathing").
+    pub fn render(&mut self, s: Option<&Snapshot>) -> (Pixmap, String) {
+        let Some(s) = s else {
+            let linux = cfg!(target_os = "linux");
+            let mut p = render::blank(0);
+            let msg = if linux { "Waiting for\narmory-crated / Aura Sync" } else { "Waiting for\nArmoury Crate / Aura Sync" };
+            render::text_block(&mut p, msg, "Segoe UI", false, 24.0, rgb(0xFFFFFF), tiny_skia::Rect::from_xywh(0.0, 0.0, 480.0, 480.0).unwrap());
+            let st = if linux { "Waiting for armory-crated (Aura Sync service not running)" } else { "Waiting for Armoury Crate (Aura plugin not active)" };
+            return (p, st.into());
+        };
+        let (leds, t, name) = self.effect_leds(s);
         let p = self.paint(&leds, t);
         let stale = s.age_secs() > 30.0 && s.effect <= 1;
         (p, format!("Aura Sync · {}{}", name, if stale { " (no recent updates)" } else { "" }))
