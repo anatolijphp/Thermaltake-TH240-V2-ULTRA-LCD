@@ -291,6 +291,11 @@ pub fn run() -> Result<i32, String> {
 }
 
 fn text(hdc: HDC, f: HFONT, color: COLORREF, mut r: RECT, s: &str, flags: u32) {
+    // DrawTextW reads the first character even for a count of 0, and an empty Vec's pointer is a dangling 0x2:
+    // the empty status line crashed the setup on its first paint (before the buttons were drawn)
+    if s.is_empty() {
+        return;
+    }
     let w: Vec<u16> = s.encode_utf16().collect();
     unsafe {
         SelectObject(hdc, f);
