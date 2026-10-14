@@ -62,6 +62,8 @@ pub struct Studio {
     dirty_status: bool,
     /// mode before a file dragged over the window picked one (put back if the drag leaves without a drop)
     drag_prev: Option<Mode>,
+    /// page shown before a file dragged over the window switched to Display modes (put back if the drag leaves)
+    drag_prev_page: Option<String>,
     sel: Option<(ListKind, i32)>,
     drags: [Option<LineDrag>; 2],
     pub page: String,
@@ -124,6 +126,7 @@ impl Studio {
             dirty_state: false,
             dirty_status: false,
             drag_prev: None,
+            drag_prev_page: None,
             sel: None,
             drags: [None, None],
             page: "dashboard".into(),
@@ -679,9 +682,9 @@ impl Studio {
         model::supports(m).then_some(m)
     }
 
-    /// A file is dragged over the window: the matching mode is selected at once (put back if the drag leaves), the
-    /// page greys out all but the preview and shows a drop icon on it. In the Idle view the file becomes the idle
-    /// picture instead.
+    /// A file is dragged over the window: the matching mode is selected at once and Display modes is shown (both put
+    /// back if the drag leaves), the page greys out all but the preview and shows a drop icon on it. In the Idle view
+    /// the file becomes the idle picture instead.
     pub fn drag_enter(&mut self, paths: Vec<String>) {
         let file = paths.first().cloned().unwrap_or_default();
         let name = std::path::Path::new(&file).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -696,6 +699,10 @@ impl Studio {
                     self.change(|c| c.Mode = m);
                     self.dirty_state = true;
                     self.dirty_status = true;
+                }
+                if self.page != "modes" {
+                    self.drag_prev_page.get_or_insert(self.page.clone());
+                    self.js("page", json!("modes"));
                 }
             }
         }
@@ -714,6 +721,9 @@ impl Studio {
             self.dirty_state = true;
             self.dirty_status = true;
         }
+        if let Some(page) = self.drag_prev_page.take() {
+            self.js("page", json!(page));
+        }
         self.js("dnd", json!({"active": false}));
     }
 
@@ -731,6 +741,7 @@ impl Studio {
         match mode {
             Some(m) => {
                 self.drag_prev = None;
+                self.drag_prev_page = None;
                 self.change(|c| c.Mode = m);
                 self.set_media(m, file);
                 self.dirty_state = true;
