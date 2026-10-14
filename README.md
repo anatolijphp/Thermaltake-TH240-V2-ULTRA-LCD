@@ -156,13 +156,14 @@ build.cmd                      # Windows: build\windows\
 
 To try the new build without installing it:
 ```
-run.cmd                        # Windows: Studio from build\windows\app (builds first if nothing is built)
+run.cmd                        # Windows: Studio from build\windows\app
 run.cmd ttlcd info             # Windows: the command-line tool
-./run.sh                       # Linux: Studio (rebuilds first when the sources are newer)
+./run.sh                       # Linux: Studio
 ./run.sh ttlcd info            # Linux: the command-line tool
 ```
-`--build` as the first argument forces a rebuild. Studio takes over the cooler while it runs (on Linux it stops the
-`ttlcd` user service); close an installed Studio first.
+Both build the current sources first (only the binaries, no installer or packages; quick when nothing changed).
+Studio takes over the cooler while it runs (on Linux it stops the `ttlcd` user service); close an installed Studio
+first.
 
 On Linux the build needs `curl`, `xz`, `dpkg` and the GTK 3 / WebKitGTK 4.1 runtime libraries a desktop already has
 (no `-dev` packages: it links through generated pkg-config stubs). Without a C compiler it fetches Zig as the linker.

@@ -73,6 +73,38 @@ pub fn rotation_for(c: &Config, user: i32) -> i32 {
 pub fn next_user_rotation(c: &Config) -> i32 {
     (user_rotation(c) + 90) % 360
 }
+/// How a cooler is recognised: "VID:PID/serial", e.g. "1A2C:151D/A247392SS000000".
+pub fn device_key(usb_id: (u16, u16), serial: &str) -> String {
+    format!("{:04X}:{:04X}/{}", usb_id.0, usb_id.1, serial.trim_matches(|ch: char| ch == '\0' || ch.is_whitespace()))
+}
+
+/// Calibration measured on a cooler: the live Rotation at which frames are upright (PreviewMount) and the cooler's
+/// stored rotation that shows its own idle screen upright then (HwUpright).
+pub struct KnownMount {
+    pub device: &'static str,
+    pub preview_mount: i32,
+    pub hw_upright: i32,
+}
+
+pub const KNOWN_MOUNTS: &[KnownMount] = &[
+    // TH240 V2 Ultra on the LX800 firmware with the TT021 panel patch (CLAUDE.md), checked on the LCD 2026-10-14
+    KnownMount { device: "1A2C:151D/A247392SS000000", preview_mount: 270, hw_upright: 90 },
+];
+
+/// Applies the known calibration for `device` once (Config.CalibratedFor): the picture becomes upright and the
+/// cooler's idle screen follows. False when there is none or it was applied before.
+pub fn apply_known_mount(c: &mut Config, device: &str) -> bool {
+    let Some(m) = KNOWN_MOUNTS.iter().find(|m| m.device.eq_ignore_ascii_case(device)) else { return false };
+    if c.CalibratedFor.eq_ignore_ascii_case(device) {
+        return false;
+    }
+    c.PreviewMount = m.preview_mount;
+    c.Rotation = m.preview_mount;
+    c.HwUpright = m.hw_upright;
+    c.CalibratedFor = device.to_string();
+    true
+}
+
 /// The cooler draws its idle picture turned like the live frames: Rotation - mount from upright.
 pub fn idle_preview_angle(c: &Config) -> i32 {
     user_rotation(c)
@@ -441,5 +473,24 @@ mod tests {
         c.HwUpright = 90;
         c.Rotation = 0; // user 90
         assert_eq!(engine::hw_for(&c), 0);
+    }
+
+    #[test]
+    fn known_mount() {
+        let key = device_key((0x1A2C, 0x151D), "A247392SS000000\0");
+        assert_eq!(key, "1A2C:151D/A247392SS000000");
+        let mut c = Config::default();
+        c.Rotation = 0;
+        c.PreviewMount = 0;
+        c.HwUpright = 90;
+        assert!(apply_known_mount(&mut c, &key));
+        assert_eq!((c.Rotation, c.PreviewMount, c.HwUpright), (270, 270, 90));
+        assert_eq!(user_rotation(&c), 0);
+        assert_eq!(engine::hw_for(&c), 90);
+        // once: a later turn by the user is kept
+        c.Rotation = 0;
+        assert!(!apply_known_mount(&mut c, &key));
+        assert_eq!(c.Rotation, 0);
+        assert!(!apply_known_mount(&mut Config::default(), "264A:233C/OTHER"));
     }
 }

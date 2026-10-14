@@ -13,7 +13,11 @@ rem     (both from extras\rescue, unchanged, compiled with the csc that ships wi
 rem     firmware\...                         firmware image, Nuvoton helper, burn guide (copied from firmware\)
 rem   build\windows\TTLcdStudio-Setup.exe    installer stub with build\windows\app as payload
 rem The Linux packages are built on Linux (build.sh). Names must differ by more than case.
+rem   build.cmd run   only what ..\run.cmd starts: the binaries into build\windows\app (no installer; the C# tools
+rem                   only when missing). cargo recompiles only what changed, so it is quick when nothing did.
 setlocal
+set RUN=
+if /i "%~1"=="run" set RUN=1
 cd /d "%~dp0"
 set "RS=%CD%"
 for %%i in ("%RS%\..") do set "ROOT=%%~fi"
@@ -23,6 +27,10 @@ if not exist "%T%\rust\.done-1.98.0" set FETCH=1
 if not exist "%T%\rust\.done-rust-std-1.98.0-i686-pc-windows-gnullvm" set FETCH=1
 if not exist "%T%\llvm-mingw\.done-20260922" set FETCH=1
 if not exist "%T%\node\.done-24.21.0" set FETCH=1
+rem the same markers with the Linux toolchain in tools\ (src/fetch.sh): fetch.cmd replaces it
+if not exist "%T%\rust\bin\rustc.exe" set FETCH=1
+if not exist "%T%\llvm-mingw\bin\clang.exe" set FETCH=1
+if not exist "%T%\node\node.exe" set FETCH=1
 if defined FETCH call "%RS%\fetch.cmd" || exit /b 1
 set "PATH=%T%\rust\bin;%T%\llvm-mingw\bin;%PATH%"
 set "CARGO_HOME=%T%\cargo-home"
@@ -42,12 +50,15 @@ set "VER=%VER:"=%"
 echo TT LCD %VER%
 
 echo [1/5] cargo build (x86_64)
-cargo build --release --locked --target %W% -p ttlcd-cli -p ttlcd-studio -p ttlcd-aura-hal -p ttlcd-setup || exit /b 1
+set SETUP=-p ttlcd-setup
+if defined RUN set SETUP=
+cargo build --release --locked --target %W% -p ttlcd-cli -p ttlcd-studio -p ttlcd-aura-hal %SETUP% || exit /b 1
 echo [2/5] cargo build (i686 Aura plugin: ASUS LightingService is a 32-bit process)
 cargo build --release --locked --target %W32% -p ttlcd-aura-hal || exit /b 1
 
 echo [3/5] extras\rescue (C#, x86 csc: SCSI_PASS_THROUGH_DIRECT with TurboWriter's 32-bit layout)
 set "CSC32=%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+if defined RUN if exist "%APP%\firmware\ttrescue.exe" if exist "%APP%\firmware\PatchPanel.exe" (echo   already built& goto app)
 if not exist "%APP%\firmware" mkdir "%APP%\firmware"
 del /q "%APP%\firmware\*.old" >nul 2>nul
 for %%f in (ttrescue.exe PatchPanel.exe) do if exist "%APP%\firmware\%%f" ren "%APP%\firmware\%%f" "%%f.%RANDOM%.old"
@@ -61,6 +72,7 @@ del /q "%TGT%\lx800_tt021panel.check.bin"
 if /i not "%H%"=="%WANT%" (echo PatchPanel output differs from firmware\lx800_tt021panel.bin & exit /b 1)
 echo PatchPanel: rebuilds lx800_tt021panel.bin byte for byte
 
+:app
 echo [4/5] build\windows\app
 if not exist "%APP%\driver" mkdir "%APP%\driver"
 if not exist "%APP%\firmware" mkdir "%APP%\firmware"
@@ -80,6 +92,7 @@ if not errorlevel 1 (echo TTLcdStudio.exe imports WebView2Loader.dll; the app sh
 for %%f in (MttVDD.inf MttVDD.dll mttvdd.cat) do copy /y "%ROOT%\driver\%%f" "%APP%\driver\" >nul || exit /b 1
 for %%f in (README.md lx800_tt021panel.bin FA93_musb.bin hardware_boot_pins.jpg SHA256SUMS.txt) do copy /y "%ROOT%\firmware\%%f" "%APP%\firmware\" >nul || exit /b 1
 
+if defined RUN (echo build OK: build\windows\app ^(%VER%^)& exit /b 0)
 echo [5/5] TTLcdStudio-Setup.exe
 if exist "%OUT%\TTLcdStudio-Setup.exe" del /q "%OUT%\TTLcdStudio-Setup.exe"
 cargo metadata --no-deps --format-version 1 | findstr /c:"ttlcd-pack" >nul

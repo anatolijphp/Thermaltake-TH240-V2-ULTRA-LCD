@@ -277,6 +277,9 @@ config! {
     /// The cooler's stored rotation (0x11) that shows its idle screen upright when Rotation == PreviewMount (taken from
     /// the cooler on first connect). Engine::hw_for derives the cooler's rotation from Rotation.
     HwUpright: i32 = -1,
+    /// The cooler (model::device_key) whose calibration from model::KNOWN_MOUNTS was applied; "" = none yet. Applied
+    /// once per cooler, so turning the picture afterwards is kept.
+    CalibratedFor: String = "",
     Brightness: i32 = 100,
     /// false = fill/crop, true = fit with borders
     FitContain: bool = false,

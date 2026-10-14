@@ -223,6 +223,16 @@ fn service_run() -> R {
             engine.set_config(effective(Config::load()));
             println!("settings reloaded");
         }
+        // a cooler with a measured calibration (model::KNOWN_MOUNTS) gets it once, saved like Studio does
+        if let Some(key) = engine.device_key().filter(|k| model::apply_known_mount(&mut (*engine.config()).clone(), k)) {
+            let mut c = Config::load();
+            model::apply_known_mount(&mut c, &key);
+            if c.save().is_ok() {
+                last = stamp(&path);
+            }
+            engine.set_config(effective(c));
+            println!("calibration for {key} applied");
+        }
         let st = engine.status();
         if st != shown {
             println!("{st}");

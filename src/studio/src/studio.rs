@@ -421,6 +421,13 @@ impl Studio {
                 self.note = None;
             }
         }
+        // a cooler with a measured calibration (model::KNOWN_MOUNTS) gets it once
+        if let Some(key) = self.engine.device_key() {
+            let mut c = (*self.cfg()).clone();
+            if model::apply_known_mount(&mut c, &key) {
+                self.change(|n| *n = c);
+            }
+        }
         // first connect: the cooler's current rotation is taken as the one that matches today's live rotation
         let hw = self.engine.hw_rotation();
         if hw >= 0 && self.cfg().HwUpright < 0 {

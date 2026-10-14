@@ -58,7 +58,8 @@ before 2.0, e.g. `ed769c0` = 1.3.3).
     `cargo run -p ttlcd-setup --bin ttlcd-pack -- <stub> build/windows/app <out>` (format in `src/installer/src/pack.rs`).
   - `build/linux/ttlcd_<ver>_amd64.deb`, `ttlcd-studio_<ver>_amd64.deb`, `ttlcd-<ver>-linux-x86_64.tar.gz`.
 - `run.sh` (Linux) / `run.cmd` (Windows) run the new build from `build/` without installing: Studio, or
-  `run.sh ttlcd <command>` for the CLI; `--build` forces a rebuild (run.sh also rebuilds when sources are newer).
+  `run.sh ttlcd <command>` for the CLI. Every start builds the current sources first (`build.sh run` / `build.cmd run`:
+  binaries only, no packages or installer; cargo makes it quick when nothing changed).
 - The version is `[workspace.package] version` in `src/Cargo.toml`. In-use binaries are renamed to `*.old` before
   copying (Windows). Binary names must differ by more than case.
 - Dev build by hand: `cd rs; export PATH=$PWD/../tools/rust/bin:$PWD/../tools/llvm-mingw/bin:$PATH

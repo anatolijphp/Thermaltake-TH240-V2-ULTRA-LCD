@@ -2,6 +2,7 @@
 # Builds TT LCD (Rust, src/) with the bundled toolchain from src/fetch.sh; nothing is installed. Linux host; the
 # Windows build is cross-linked with llvm-mingw. ./build.sh at the top of the repo runs this.
 #   ./build.sh [all|linux|windows]       (default all)
+#   ./build.sh run                       only the Linux binaries in build/target (no packages): what ../run.sh starts
 # Output (sources stay in src/; intermediate files in build/target/):
 #   build/linux/ttlcd_<ver>_amd64.deb            CLI + screen service: /usr/bin/ttlcd, systemd user unit, udev rule
 #   build/linux/ttlcd-studio_<ver>_amd64.deb     all of the above + /usr/bin/ttlcd-studio, desktop entry, icon
@@ -21,12 +22,13 @@ RS=$PWD
 ROOT=$(cd .. && pwd)
 T=$ROOT/tools
 WHAT=${1:-all}
-case $WHAT in all|linux|windows) ;; *) echo "usage: $0 [all|linux|windows]" >&2; exit 2 ;; esac
+case $WHAT in all|linux|windows|run) ;; *) echo "usage: $0 [all|linux|windows|run]" >&2; exit 2 ;; esac
 
 need_zig() { ! command -v cc >/dev/null 2>&1 || [ "${TTLCD_ZIG:-}" = 1 ]; }
 if [ ! -f "$T/rust/.done-1.98.0" ] || [ ! -f "$T/rust/.done-rust-std-1.98.0-i686-pc-windows-gnullvm" ] ||
    [ ! -f "$T/llvm-mingw/.done-20260922" ] || [ ! -x "$T/linux-pc/pkg-config" ] || [ ! -f "$T/node/.done-24.21.0" ] ||
-   { need_zig && [ ! -f "$T/zig/.done-0.16.0" ]; }; then
+   { need_zig && [ ! -f "$T/zig/.done-0.16.0" ]; } ||
+   [ ! -e "$T/rust/bin/rustc" ] || [ ! -e "$T/llvm-mingw/bin/clang" ] || [ ! -e "$T/node/bin/node" ]; then
     sh ./fetch.sh
 fi
 export PATH="$T/rust/bin:$T/llvm-mingw/bin:$PATH"
@@ -38,6 +40,12 @@ if need_zig; then
 fi
 unset CARGO_TARGET_DIR   # src/.cargo/config.toml: build/target
 TGT=$ROOT/build/target
+
+if [ "$WHAT" = run ]; then
+    # cargo rebuilds only what changed, so this is quick when the build is current
+    cargo build --release --locked --target x86_64-unknown-linux-gnu -p ttlcd-cli -p ttlcd-studio
+    exit 0
+fi
 VER=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)
 [ -n "$VER" ] || { echo "no [workspace.package] version in src/Cargo.toml" >&2; exit 1; }
 echo "TT LCD $VER"
