@@ -22,6 +22,8 @@ pub struct Lcd {
     lcd: Mutex<Dev>,
     /// LX800 firmware board: its panel setup shows red and blue exchanged, so frames are swapped back before sending.
     pub swap_red_blue: bool,
+    /// USB VID, PID it was found under (VID:PID or ALT_VID:ALT_PID)
+    pub usb_id: (u16, u16),
     #[cfg(windows)]
     _owner: hid::DeviceMutex,
 }
@@ -60,6 +62,7 @@ impl Lcd {
             ctrl: Mutex::new(Ctrl { dev: ctrl, buf: [0; CTRL_PACKET + 1] }),
             lcd: Mutex::new(lcd),
             swap_red_blue: swap,
+            usb_id: if swap { (ALT_VID, ALT_PID) } else { (VID, PID) },
             #[cfg(windows)]
             _owner: owner,
         })

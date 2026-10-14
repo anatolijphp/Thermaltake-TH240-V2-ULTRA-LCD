@@ -61,6 +61,8 @@ struct Texts {
     render_status: String,
     device_status: String,
     serial: String,
+    /// model::device_key of the connected cooler, once its serial is known
+    device_key: Option<String>,
     game: Option<String>,
 }
 
@@ -235,6 +237,10 @@ impl Engine {
     }
     pub fn serial(&self) -> String {
         self.0.texts.lock().unwrap().serial.clone()
+    }
+    /// How the connected cooler is recognised (model::device_key); None until its serial has been read.
+    pub fn device_key(&self) -> Option<String> {
+        self.0.texts.lock().unwrap().device_key.clone()
     }
     pub fn render_status(&self) -> String {
         self.0.texts.lock().unwrap().render_status.clone()
@@ -664,6 +670,7 @@ impl Engine {
     fn start_control(&self, lcd: Arc<Lcd>) {
         let session = self.0.session.fetch_add(1, SeqCst) + 1;
         self.0.hw_rotation.store(-1, SeqCst); // re-read from the cooler on every connect
+        self.0.texts.lock().unwrap().device_key = None;
         let e = self.clone();
         let _ = thread::Builder::new().name("lcd-control".into()).spawn(move || {
             let (mut sent, mut sleep_sent) = (-1, -1);
@@ -708,7 +715,9 @@ impl Engine {
                     if !got_serial && now >= next_serial {
                         match lcd.serial() {
                             Ok(s) => {
-                                e.0.texts.lock().unwrap().serial = s;
+                                let mut t = e.0.texts.lock().unwrap();
+                                t.device_key = Some(crate::model::device_key(lcd.usb_id, &s));
+                                t.serial = s;
                                 got_serial = true;
                             }
                             Err(_) => next_serial = now + Duration::from_secs(5),
