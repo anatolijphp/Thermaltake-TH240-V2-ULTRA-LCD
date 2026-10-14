@@ -1,7 +1,25 @@
 .settings {
-  .card > .switch { display: flex; }
-  .gap { margin-bottom: 10px; }
-  .gap2 { margin-bottom: 12px; }
-  .top16 { margin-top: 16px; }
-  .field { display: flex; input { flex: 1; } }
+  .card > .switch {
+    display: flex;
+  }
+
+  .gap {
+    margin-bottom: 10px;
+  }
+
+  .gap2 {
+    margin-bottom: 12px;
+  }
+
+  .top16 {
+    margin-top: 16px;
+  }
+
+  .field {
+    display: flex;
+
+    input {
+      flex: 1;
+    }
+  }
 }

@@ -1,11 +1,36 @@
 @use 'tokens' as *;
 
 .video-editor {
-  .pathrow { margin-bottom: 12px; }
-  .videogrid { display: grid; grid-template-columns: 1fr 170px; }
-  .thumbcol { padding-left: 16px; }
-  .vthumb { width: 150px; height: 150px; border-radius: 50%; background: #000; border: 1px solid $line; overflow: hidden;
-    img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .pathrow {
+    margin-bottom: 12px;
   }
-  .vinfo { margin-top: 6px; }
+
+  .videogrid {
+    display: grid;
+    grid-template-columns: 1fr 170px;
+  }
+
+  .thumbcol {
+    padding-left: 16px;
+  }
+
+  .vthumb {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: #000;
+    border: 1px solid $line;
+    overflow: hidden;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+  }
+
+  .vinfo {
+    margin-top: 6px;
+  }
 }

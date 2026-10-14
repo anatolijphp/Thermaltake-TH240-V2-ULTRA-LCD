@@ -1,15 +1,74 @@
 @use 'tokens' as *;
 
-.switch { display: inline-flex; align-items: center; cursor: pointer; color: $text; width: fit-content;
-  .track { position: relative; width: 40px; height: 20px; border-radius: 10px; background: #2C2C2F; border: 1px solid transparent; flex: none; transition: background .2s;
-    &::before { content: ""; position: absolute; inset: -1px; border-radius: 10px; background: $accent; opacity: 0; transition: opacity .2s, box-shadow .2s; }
+.switch {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  color: $text;
+  width: fit-content;
+
+  .track {
+    position: relative;
+    width: 40px;
+    height: 20px;
+    border-radius: 10px;
+    background: #2C2C2F;
+    border: 1px solid transparent;
+    flex: none;
+    transition: background .2s;
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: 10px;
+      background: $accent;
+      opacity: 0;
+      transition: opacity .2s, box-shadow .2s;
+    }
   }
-  .knob { position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #CFCFD2; transition: transform .2s $ease; }
-  .txt { margin-left: 10px; }
-  &:hover .track { background: #3A3A3F; border-color: $accent; }
-  &:hover .knob { background: #fff; }
-  &.on .track::before { opacity: 1; box-shadow: $glowsoft; }
-  &.on .knob { transform: translateX(20px); background: #fff; }
-  &.on:hover .track::before { background: #FF3D63; box-shadow: $glow; }
-  &.disabled { opacity: .45; pointer-events: none; }
+
+  .knob {
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #CFCFD2;
+    transition: transform .2s $ease;
+  }
+
+  .txt {
+    margin-left: 10px;
+  }
+
+  &:hover .track {
+    background: #3A3A3F;
+    border-color: $accent;
+  }
+
+  &:hover .knob {
+    background: #fff;
+  }
+
+  &.on .track::before {
+    opacity: 1;
+    box-shadow: $glowsoft;
+  }
+
+  &.on .knob {
+    transform: translateX(20px);
+    background: #fff;
+  }
+
+  &.on:hover .track::before {
+    background: #FF3D63;
+    box-shadow: $glow;
+  }
+
+  &.disabled {
+    opacity: .45;
+    pointer-events: none;
+  }
 }

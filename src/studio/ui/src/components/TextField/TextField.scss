@@ -1,8 +1,26 @@
 @use 'tokens' as *;
 
-input.text { background: #0B0B0C; color: $text; border: 1px solid $line; padding: 6px 7px; outline: none; border-radius: 0; min-width: 0;
-  -webkit-user-select: text; user-select: text;
-  &:focus { border-color: $linehi; }
-  &.num { width: 64px; margin-right: 14px; }
-  &:disabled { opacity: .45; }
+input.text {
+  background: #0B0B0C;
+  color: $text;
+  border: 1px solid $line;
+  padding: 6px 7px;
+  outline: none;
+  border-radius: 0;
+  min-width: 0;
+  -webkit-user-select: text;
+  user-select: text;
+
+  &:focus {
+    border-color: $linehi;
+  }
+
+  &.num {
+    width: 64px;
+    margin-right: 14px;
+  }
+
+  &:disabled {
+    opacity: .45;
+  }
 }

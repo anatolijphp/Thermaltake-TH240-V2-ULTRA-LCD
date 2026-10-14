@@ -1,27 +1,132 @@
 @use 'tokens' as *;
 
-.lines { position: relative;
-  &.dragging, &.dragging * { cursor: move !important; }
-}
-.lrow { display: flex; align-items: center; min-height: 36px;
-  .n { width: 22px; flex: none; color: $dim; font-size: 11px; }
-  .chips { display: flex; flex-wrap: wrap; align-items: center; }
-}
-.rchip { display: inline-flex; align-items: center; border-radius: 15px; padding: 4px 14px 4px 6px; margin: 3px 8px 3px 0; border: 1px solid $line;
-  background: $cardhi; color: $dim; cursor: pointer; white-space: nowrap;
-  &:hover { border-color: $linehi; }
-  .dot { padding: 4px; margin-right: 4px; display: flex;
-    i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid $dim; display: block; }
+.lines {
+  position: relative;
+
+  &.dragging,
+  &.dragging * {
+    cursor: move !important;
   }
-  &.on { color: $text; .dot i { background: $accent; border-color: $accent; } }
-  &.sel { border: 2px solid $accent; background: rgba(255, 31, 75, .18); box-shadow: $glow; padding: 3px 13px 3px 5px; }
-  &.preview { opacity: .4; pointer-events: none; }
 }
-.blank { display: inline-flex; align-items: center; border-radius: 15px; padding: 5px 10px 5px 12px; margin: 3px 8px 3px 0; border: 1px solid $line;
-  color: $dim; font-size: 12px; font-style: italic;
-  .x { margin-left: 10px; font-size: 10px; cursor: pointer; font-style: normal; &:hover { color: $text; } }
-  &.preview { opacity: .4; }
+
+.lrow {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+
+  .n {
+    width: 22px;
+    flex: none;
+    color: $dim;
+    font-size: 11px;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
 }
-.addblank { display: inline-flex; border-radius: 15px; padding: 5px 14px 5px 12px; margin: 3px 8px 3px 0; border: 1px solid $dim; color: $dim; font-size: 12px; cursor: move; }
-.line-ghost { position: fixed; z-index: 50; pointer-events: none; border-radius: 15px; padding: 6px 14px 6px 12px; border: 1px solid $accent;
-  background: rgba(42, 10, 18, .88); box-shadow: $glowsoft; color: #fff; white-space: nowrap; }
+
+.rchip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 15px;
+  padding: 4px 14px 4px 6px;
+  margin: 3px 8px 3px 0;
+  border: 1px solid $line;
+  background: $cardhi;
+  color: $dim;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: $linehi;
+  }
+
+  .dot {
+    padding: 4px;
+    margin-right: 4px;
+    display: flex;
+
+    i {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1.5px solid $dim;
+      display: block;
+    }
+  }
+
+  &.on {
+    color: $text;
+
+    .dot i {
+      background: $accent;
+      border-color: $accent;
+    }
+  }
+
+  &.sel {
+    border: 2px solid $accent;
+    background: rgba(255, 31, 75, .18);
+    box-shadow: $glow;
+    padding: 3px 13px 3px 5px;
+  }
+
+  &.preview {
+    opacity: .4;
+    pointer-events: none;
+  }
+}
+
+.blank {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 15px;
+  padding: 5px 10px 5px 12px;
+  margin: 3px 8px 3px 0;
+  border: 1px solid $line;
+  color: $dim;
+  font-size: 12px;
+  font-style: italic;
+
+  .x {
+    margin-left: 10px;
+    font-size: 10px;
+    cursor: pointer;
+    font-style: normal;
+
+    &:hover {
+      color: $text;
+    }
+  }
+
+  &.preview {
+    opacity: .4;
+  }
+}
+
+.addblank {
+  display: inline-flex;
+  border-radius: 15px;
+  padding: 5px 14px 5px 12px;
+  margin: 3px 8px 3px 0;
+  border: 1px solid $dim;
+  color: $dim;
+  font-size: 12px;
+  cursor: move;
+}
+
+.line-ghost {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  border-radius: 15px;
+  padding: 6px 14px 6px 12px;
+  border: 1px solid $accent;
+  background: rgba(42, 10, 18, .88);
+  box-shadow: $glowsoft;
+  color: #fff;
+  white-space: nowrap;
+}

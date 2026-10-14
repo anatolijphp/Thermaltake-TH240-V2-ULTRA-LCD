@@ -1,9 +1,68 @@
-.rz { position: fixed; z-index: 100; }
-.rz-North { left: 8px; right: 8px; top: 0; height: 5px; cursor: n-resize; }
-.rz-South { left: 8px; right: 8px; bottom: 0; height: 5px; cursor: s-resize; }
-.rz-West { top: 8px; bottom: 8px; left: 0; width: 5px; cursor: w-resize; }
-.rz-East { top: 8px; bottom: 8px; right: 0; width: 5px; cursor: e-resize; }
-.rz-NorthWest { left: 0; top: 0; width: 8px; height: 8px; cursor: nw-resize; }
-.rz-NorthEast { right: 0; top: 0; width: 8px; height: 8px; cursor: ne-resize; }
-.rz-SouthWest { left: 0; bottom: 0; width: 8px; height: 8px; cursor: sw-resize; }
-.rz-SouthEast { right: 0; bottom: 0; width: 12px; height: 12px; cursor: se-resize; }
+.rz {
+  position: fixed;
+  z-index: 100;
+
+  &-North {
+    left: 8px;
+    right: 8px;
+    top: 0;
+    height: 5px;
+    cursor: n-resize;
+  }
+
+  &-South {
+    left: 8px;
+    right: 8px;
+    bottom: 0;
+    height: 5px;
+    cursor: s-resize;
+  }
+
+  &-West {
+    top: 8px;
+    bottom: 8px;
+    left: 0;
+    width: 5px;
+    cursor: w-resize;
+  }
+
+  &-East {
+    top: 8px;
+    bottom: 8px;
+    right: 0;
+    width: 5px;
+    cursor: e-resize;
+  }
+
+  &-NorthWest {
+    left: 0;
+    top: 0;
+    width: 8px;
+    height: 8px;
+    cursor: nw-resize;
+  }
+
+  &-NorthEast {
+    right: 0;
+    top: 0;
+    width: 8px;
+    height: 8px;
+    cursor: ne-resize;
+  }
+
+  &-SouthWest {
+    left: 0;
+    bottom: 0;
+    width: 8px;
+    height: 8px;
+    cursor: sw-resize;
+  }
+
+  &-SouthEast {
+    right: 0;
+    bottom: 0;
+    width: 12px;
+    height: 12px;
+    cursor: se-resize;
+  }
+}

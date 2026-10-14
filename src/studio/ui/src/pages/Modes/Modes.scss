@@ -1,4 +1,14 @@
 .modes {
-  .pathrow { display: flex; gap: 8px; input { flex: 1; } }
-  .region { margin-top: 10px; }
+  .pathrow {
+    display: flex;
+    gap: 8px;
+
+    input {
+      flex: 1;
+    }
+  }
+
+  .region {
+    margin-top: 10px;
+  }
 }

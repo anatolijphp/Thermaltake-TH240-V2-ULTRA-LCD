@@ -1,11 +1,38 @@
 @use 'tokens' as *;
 
-.chip { display: inline-flex; align-items: center; background: $cardhi; border: 1px solid $line; border-radius: 15px; padding: 6px 14px 6px 11px;
-  margin: 0 8px 8px 0; color: $dim; white-space: nowrap;
-  .ci { font-size: 11px; color: $dim; margin-right: 8px; }
-  &:hover { border-color: $linehi; }
-  &.on { border-color: $accent; background: rgba(255, 31, 75, .18); box-shadow: $glowsoft; color: $text;
-    .ci { color: $accent; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  background: $cardhi;
+  border: 1px solid $line;
+  border-radius: 15px;
+  padding: 6px 14px 6px 11px;
+  margin: 0 8px 8px 0;
+  color: $dim;
+  white-space: nowrap;
+
+  .ci {
+    font-size: 11px;
+    color: $dim;
+    margin-right: 8px;
   }
-  &.inline { margin: 0 0 0 8px; }
+
+  &:hover {
+    border-color: $linehi;
+  }
+
+  &.on {
+    border-color: $accent;
+    background: rgba(255, 31, 75, .18);
+    box-shadow: $glowsoft;
+    color: $text;
+
+    .ci {
+      color: $accent;
+    }
+  }
+
+  &.inline {
+    margin: 0 0 0 8px;
+  }
 }

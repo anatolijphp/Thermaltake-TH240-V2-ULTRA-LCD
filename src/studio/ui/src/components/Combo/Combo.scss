@@ -1,13 +1,66 @@
 @use 'tokens' as *;
 
-.combo { position: relative; height: 32px; background: #0B0B0C; border: 1px solid $line; border-radius: 2px; cursor: pointer;
-  &:hover, &.open { border-color: $accent; }
-  .cur { position: absolute; left: 10px; right: 30px; top: 0; bottom: 0; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .chev { position: absolute; right: 10px; top: 11px; font-size: 10px; color: $dim; }
-}
-.combo-list { position: fixed; overflow-y: auto; z-index: 150; background: #18181A; border: 1px solid $line; box-shadow: 0 8px 24px rgba(0, 0, 0, .6);
-  div { padding: 7px 10px; white-space: nowrap; cursor: pointer; }
-  div:hover, div.sel { background: rgba(255, 31, 75, .2); }
-  &::-webkit-scrollbar { width: 6px; }
-  &::-webkit-scrollbar-thumb { background: #404044; border-radius: 3px; }
+.combo {
+  position: relative;
+  height: 32px;
+  background: #0B0B0C;
+  border: 1px solid $line;
+  border-radius: 2px;
+  cursor: pointer;
+
+  &:hover,
+  &.open {
+    border-color: $accent;
+  }
+
+  .cur {
+    position: absolute;
+    left: 10px;
+    right: 30px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .chev {
+    position: absolute;
+    right: 10px;
+    top: 11px;
+    font-size: 10px;
+    color: $dim;
+  }
+
+  // the open list (on the page, not inside the combo)
+  &-list {
+    position: fixed;
+    overflow-y: auto;
+    z-index: 150;
+    background: #18181A;
+    border: 1px solid $line;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .6);
+
+    div {
+      padding: 7px 10px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    div:hover,
+    div.sel {
+      background: rgba(255, 31, 75, .2);
+    }
+
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #404044;
+      border-radius: 3px;
+    }
+  }
 }

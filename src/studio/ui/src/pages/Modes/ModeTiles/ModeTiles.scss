@@ -1,17 +1,78 @@
 @use 'tokens' as *;
 
-.tiles { display: grid; gap: 10px; margin-bottom: 18px; }
-.tile { position: relative; height: 96px; background: $card; border: 1px solid $line; border-radius: 3px; color: $dim;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden;
-  .ic { font-size: 26px; height: 30px; display: flex; align-items: center; }
-  .tx { margin-top: 6px; font-size: 12px; }
-  &:hover { background: $cardhi; border-color: $linehi; }
-  &.sel { border-color: $accent; background: linear-gradient(180deg, rgba(255, 31, 75, .25), rgba(255, 31, 75, .08)); box-shadow: $glow;
-    .ic { color: $accent; }
-    .tx { color: $text; }
-    // red corner and the RGB line along the bottom
-    &::before { content: ""; position: absolute; left: 0; top: 0; border-style: solid; border-width: 12px 12px 0 0; border-color: $accent transparent transparent transparent; }
-    &::after { content: ""; position: absolute; left: 1px; right: 1px; bottom: 1px; height: 2px; background: $rgb; }
+.tiles {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.tile {
+  position: relative;
+  height: 96px;
+  background: $card;
+  border: 1px solid $line;
+  border-radius: 3px;
+  color: $dim;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+
+  .ic {
+    font-size: 26px;
+    height: 30px;
+    display: flex;
+    align-items: center;
   }
-  &.disabled { opacity: .35; pointer-events: none; }
+
+  .tx {
+    margin-top: 6px;
+    font-size: 12px;
+  }
+
+  &:hover {
+    background: $cardhi;
+    border-color: $linehi;
+  }
+
+  &.sel {
+    border-color: $accent;
+    background: linear-gradient(180deg, rgba(255, 31, 75, .25), rgba(255, 31, 75, .08));
+    box-shadow: $glow;
+
+    .ic {
+      color: $accent;
+    }
+
+    .tx {
+      color: $text;
+    }
+
+    // red corner and the RGB line along the bottom
+    &::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      border-style: solid;
+      border-width: 12px 12px 0 0;
+      border-color: $accent transparent transparent transparent;
+    }
+
+    &::after {
+      content: "";
+      position: absolute;
+      left: 1px;
+      right: 1px;
+      bottom: 1px;
+      height: 2px;
+      background: $rgb;
+    }
+  }
+
+  &.disabled {
+    opacity: .35;
+    pointer-events: none;
+  }
 }

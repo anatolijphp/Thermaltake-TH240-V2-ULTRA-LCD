@@ -1,68 +1,352 @@
 @use 'tokens' as *;
 
-.preview { width: 400px; flex: none; position: relative; background: rgba(13, 13, 14, .7); border-left: 1px solid $line; overflow-y: auto; overflow-x: hidden;
-  &::-webkit-scrollbar { width: 0; }
-  .pvtitle { position: absolute; left: 10px; top: 10px; margin: 0; }
-  .pvinner { margin: 34px 28px 0; }
-  .pvtop { display: flex; align-items: center; justify-content: space-between; height: 30px; }
-  .rotate { width: 30px; height: 30px; border-radius: 15px; background: rgba(19, 19, 20, .9); border: 1px solid $linehi; color: $text; font-size: 13px;
-    display: flex; align-items: center; justify-content: center;
-    &:hover { border-color: $accent; box-shadow: $glowsoft; color: $accent; }
-    &:active { background: $accentdim; }
+.preview {
+  width: 400px;
+  flex: none;
+  position: relative;
+  background: rgba(13, 13, 14, .7);
+  border-left: 1px solid $line;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  &::-webkit-scrollbar {
+    width: 0;
+  }
+
+  .pvtitle {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    margin: 0;
+  }
+
+  .pvinner {
+    margin: 34px 28px 0;
+  }
+
+  .pvtop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 30px;
+  }
+
+  .rotate {
+    width: 30px;
+    height: 30px;
+    border-radius: 15px;
+    background: rgba(19, 19, 20, .9);
+    border: 1px solid $linehi;
+    color: $text;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+      border-color: $accent;
+      box-shadow: $glowsoft;
+      color: $accent;
+    }
+
+    &:active {
+      background: $accentdim;
+    }
   }
 
   // the round LCD: the RGB ring is a full rotating disc behind the screen, which covers all but its 4 px rim, so
   // ring and picture meet without a gap
-  .lcd { position: relative; width: 344px; height: 344px; margin: 14px auto 0;
-    > * { z-index: 1; }
-    .ring { position: absolute; inset: 2px; border-radius: 50%; animation: lcd-spin 8s linear infinite; z-index: 0;
-      background: linear-gradient(135deg, #FF1F4B 0%, #FFE600 25%, #00E1FF 50%, #7A4BFF 75%, #FF2BD6 100%); }
-    .glow { position: absolute; inset: 2px; border-radius: 50%; z-index: 0; box-shadow: 0 0 26px 2px rgba(255, 31, 75, .55); }
-    .screen { position: absolute; inset: 6px; border-radius: 50%; background: #000; }
-    .disc { position: absolute; left: 6px; top: 6px; width: 332px; height: 332px; border-radius: 50%; }
-    img.disc { object-fit: contain; }
-    img.live:not([src]) { visibility: hidden; }
-  }
-  // a round cap draws a dot even at 0 length: the ring shows only while a transfer runs
-  .idle-ring { position: absolute; left: 0; top: 0; pointer-events: none; transform: rotate(-90deg); overflow: visible;
-    circle { fill: none; stroke: $accent2; stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0 0 7px rgba(0, 225, 255, .9)); opacity: 0; }
-    &.on circle { opacity: 1; }
-  }
-  // coolant temperature over the idle picture, where the firmware draws it (top half of the circle)
-  .idle-temp { position: absolute; left: 6px; top: 6px; width: 332px; height: 166px; display: flex; justify-content: center; align-items: center;
-    transform: translateY(16px); pointer-events: none; color: #fff; font-size: 64px; line-height: 1; text-shadow: 0 0 6px rgba(0, 0, 0, .6);
-    > span { display: block; }
-    .deg { font-size: 32px; align-self: flex-start; margin: 0 1px; position: relative; top: calc(50% - 26px); }
-  }
-  .idle-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: $dim; }
-  .pv-hover { display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden;
-    .pause-btn { width: 76px; height: 76px; border-radius: 38px; background: rgba(0, 0, 0, .6); border: 1px solid rgba(255, 255, 255, .33);
-      display: flex; align-items: center; justify-content: center; font-size: 28px; color: #fff; opacity: 0; transition: opacity .3s; pointer-events: none; }
-    &:hover .pause-btn, &.paused .pause-btn { opacity: 1; transition: opacity .15s; }
-  }
-  .idle-hit.editing { cursor: move; }
-  // drop target while a file is dragged over the window
-  .drop-zone { z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 40px;
-    background: rgba(0, 0, 0, .62); border: 2px dashed $accent2; box-shadow: inset 0 0 40px rgba(0, 225, 255, .35); animation: drop-in .15s ease-out;
-    .drop-ic { font-size: 64px; color: $accent2; filter: drop-shadow(0 0 10px rgba(0, 225, 255, .8)); animation: drop-bob 1.2s ease-in-out infinite; }
-    .drop-label { margin-top: 12px; font-size: 15px; font-weight: 600; color: #fff; }
-    .drop-name { margin-top: 4px; font-size: 11px; color: $dim; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    &.bad { border-color: $accent; box-shadow: inset 0 0 40px rgba(255, 31, 75, .35);
-      .drop-ic { color: $accent; filter: drop-shadow(0 0 10px rgba(255, 31, 75, .8)); animation: none; }
+  .lcd {
+    position: relative;
+    width: 344px;
+    height: 344px;
+    margin: 14px auto 0;
+
+    > * {
+      z-index: 1;
+    }
+
+    .ring {
+      position: absolute;
+      inset: 2px;
+      border-radius: 50%;
+      animation: lcd-spin 8s linear infinite;
+      z-index: 0;
+      background: linear-gradient(135deg, #FF1F4B 0%, #FFE600 25%, #00E1FF 50%, #7A4BFF 75%, #FF2BD6 100%);
+    }
+
+    .glow {
+      position: absolute;
+      inset: 2px;
+      border-radius: 50%;
+      z-index: 0;
+      box-shadow: 0 0 26px 2px rgba(255, 31, 75, .55);
+    }
+
+    .screen {
+      position: absolute;
+      inset: 6px;
+      border-radius: 50%;
+      background: #000;
+    }
+
+    .disc {
+      position: absolute;
+      left: 6px;
+      top: 6px;
+      width: 332px;
+      height: 332px;
+      border-radius: 50%;
+    }
+
+    img.disc {
+      object-fit: contain;
+    }
+
+    img.live:not([src]) {
+      visibility: hidden;
     }
   }
 
-  .pcard { background: $card; border: 1px solid $line; border-radius: 3px; padding: 10px 14px; margin-top: 24px; }
-  .connrow { display: flex; align-items: center; }
-  .conn-dot { width: 9px; height: 9px; border-radius: 50%; background: #555; flex: none; }
-  .conn-text { margin-left: 9px; font-weight: 600; }
-  .fps { margin-left: auto; font-size: 12px; color: $status; }
-  .mode-text { margin-top: 6px; color: $dim; }
-  .zoomrow { display: grid; grid-template-columns: 48px 1fr 44px; align-items: center; margin-top: 12px; }
-  .idle-info { margin-top: 6px; }
-  .idle-status { margin-top: 8px; }
-  .idle-btns { margin-top: 14px; .btn { margin: 0 8px 8px 0; } }
+  // the idle picture's view
+  .idle {
+    // a round cap draws a dot even at 0 length: the ring shows only while a transfer runs
+    &-ring {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+      transform: rotate(-90deg);
+      overflow: visible;
+
+      circle {
+        fill: none;
+        stroke: $accent2;
+        stroke-width: 5;
+        stroke-linecap: round;
+        filter: drop-shadow(0 0 7px rgba(0, 225, 255, .9));
+        opacity: 0;
+      }
+
+      &.on circle {
+        opacity: 1;
+      }
+    }
+
+    // coolant temperature over the idle picture, where the firmware draws it (top half of the circle)
+    &-temp {
+      position: absolute;
+      left: 6px;
+      top: 6px;
+      width: 332px;
+      height: 166px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transform: translateY(16px);
+      pointer-events: none;
+      color: #fff;
+      font-size: 64px;
+      line-height: 1;
+      text-shadow: 0 0 6px rgba(0, 0, 0, .6);
+
+      > span {
+        display: block;
+      }
+
+      .deg {
+        font-size: 32px;
+        align-self: flex-start;
+        margin: 0 1px;
+        position: relative;
+        top: calc(50% - 26px);
+      }
+    }
+
+    &-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: $dim;
+    }
+
+    &-hit.editing {
+      cursor: move;
+    }
+
+    &-info {
+      margin-top: 6px;
+    }
+
+    &-status {
+      margin-top: 8px;
+    }
+
+    &-btns {
+      margin-top: 14px;
+
+      .btn {
+        margin: 0 8px 8px 0;
+      }
+    }
+  }
+
+  .pv-hover {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    overflow: hidden;
+
+    .pause-btn {
+      width: 76px;
+      height: 76px;
+      border-radius: 38px;
+      background: rgba(0, 0, 0, .6);
+      border: 1px solid rgba(255, 255, 255, .33);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      color: #fff;
+      opacity: 0;
+      transition: opacity .3s;
+      pointer-events: none;
+    }
+
+    &:hover .pause-btn,
+    &.paused .pause-btn {
+      opacity: 1;
+      transition: opacity .15s;
+    }
+  }
+
+  // drop target while a file is dragged over the window
+  .drop {
+    &-zone {
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0 40px;
+      background: rgba(0, 0, 0, .62);
+      border: 2px dashed $accent2;
+      box-shadow: inset 0 0 40px rgba(0, 225, 255, .35);
+      animation: drop-in .15s ease-out;
+
+      &.bad {
+        border-color: $accent;
+        box-shadow: inset 0 0 40px rgba(255, 31, 75, .35);
+
+        .drop-ic {
+          color: $accent;
+          filter: drop-shadow(0 0 10px rgba(255, 31, 75, .8));
+          animation: none;
+        }
+      }
+    }
+
+    &-ic {
+      font-size: 64px;
+      color: $accent2;
+      filter: drop-shadow(0 0 10px rgba(0, 225, 255, .8));
+      animation: drop-bob 1.2s ease-in-out infinite;
+    }
+
+    &-label {
+      margin-top: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    &-name {
+      margin-top: 4px;
+      font-size: 11px;
+      color: $dim;
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .pcard {
+    background: $card;
+    border: 1px solid $line;
+    border-radius: 3px;
+    padding: 10px 14px;
+    margin-top: 24px;
+  }
+
+  .connrow {
+    display: flex;
+    align-items: center;
+  }
+
+  .conn {
+    &-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #555;
+      flex: none;
+    }
+
+    &-text {
+      margin-left: 9px;
+      font-weight: 600;
+    }
+  }
+
+  .fps {
+    margin-left: auto;
+    font-size: 12px;
+    color: $status;
+  }
+
+  .mode-text {
+    margin-top: 6px;
+    color: $dim;
+  }
+
+  .zoomrow {
+    display: grid;
+    grid-template-columns: 48px 1fr 44px;
+    align-items: center;
+    margin-top: 12px;
+  }
 }
-@keyframes lcd-spin { to { transform: rotate(360deg); } }
-@keyframes drop-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
-@keyframes drop-bob { 0%, 100% { transform: translateY(-3px); } 50% { transform: translateY(5px); } }
+
+@keyframes lcd-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: scale(.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes drop-bob {
+  0%,
+  100% {
+    transform: translateY(-3px);
+  }
+
+  50% {
+    transform: translateY(5px);
+  }
+}

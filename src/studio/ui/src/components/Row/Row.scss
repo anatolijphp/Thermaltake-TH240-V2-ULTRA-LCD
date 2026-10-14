@@ -1,12 +1,42 @@
 @use 'tokens' as *;
 
-.row { display: grid; align-items: center; min-height: 44px;
-  &.row-2 { grid-template-columns: 100px 1fr; }
-  &.row-3 { grid-template-columns: 100px 1fr 56px; }
-  &.row-wide { grid-template-columns: 125px 1fr 56px; }
-  &.row-compact { grid-template-columns: 80px 1fr 56px; min-height: 30px; }
-  &.top { align-items: start; > .lbl { margin-top: 6px; } }
+.row {
+  display: grid;
+  align-items: center;
+  min-height: 44px;
+
+  &.row-2 {
+    grid-template-columns: 100px 1fr;
+  }
+
+  &.row-3 {
+    grid-template-columns: 100px 1fr 56px;
+  }
+
+  &.row-wide {
+    grid-template-columns: 125px 1fr 56px;
+  }
+
+  &.row-compact {
+    grid-template-columns: 80px 1fr 56px;
+    min-height: 30px;
+  }
+
+  &.top {
+    align-items: start;
+
+    > .lbl {
+      margin-top: 6px;
+    }
+  }
+
   // a control without its own value cell spans to the end
-  > .span { grid-column: 2 / -1; }
-  > .seg, > .switch { justify-self: start; }
+  > .span {
+    grid-column: 2 / -1;
+  }
+
+  > .seg,
+  > .switch {
+    justify-self: start;
+  }
 }
