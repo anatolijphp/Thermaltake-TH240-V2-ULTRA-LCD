@@ -7,7 +7,7 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Both jobs build with the toolchain rs/fetch.* downloads into tools/ (Rust 1.98.0, llvm-mingw; pinned + SHA256),
+# Both jobs build with the toolchain src/fetch.* downloads into tools/ (Rust 1.98.0, llvm-mingw; pinned + SHA256),
 # not the runner's preinstalled Rust, so CI proves a clean machine needs nothing installed. The download cache only
 # saves time: every archive is checked against its pinned hash again after restore.
 jobs:
@@ -21,7 +21,7 @@ jobs:
           path: |
             tools/dl/rs
             tools/cargo-home/registry
-          key: rs-windows-${{ hashFiles('rs/fetch.cmd', 'rs/Cargo.lock') }}
+          key: rs-windows-${{ hashFiles('src/fetch.cmd', 'src/Cargo.lock') }}
           restore-keys: rs-windows-
 
       # build\windows\app (the installed layout) and build\windows\TTLcdStudio-Setup.exe; also compiles extras\rescue (C#) and checks
@@ -69,8 +69,8 @@ jobs:
           cargo build --release --locked -p ttlcd-aura-hal --example probe --target i686-pc-windows-gnullvm || exit /b 1
           cargo build --release --locked -p ttlcd-aura-hal --example probe --target x86_64-pc-windows-gnullvm || exit /b 1
           cd ..
-          build\rs-target\i686-pc-windows-gnullvm\release\examples\probe.exe build\windows\app\TTLcdAura.dll || exit /b 1
-          build\rs-target\x86_64-pc-windows-gnullvm\release\examples\probe.exe build\windows\app\TTLcdAura64.dll || exit /b 1
+          build\target\i686-pc-windows-gnullvm\release\examples\probe.exe build\windows\app\TTLcdAura.dll || exit /b 1
+          build\target\x86_64-pc-windows-gnullvm\release\examples\probe.exe build\windows\app\TTLcdAura64.dll || exit /b 1
 
       - name: Installer smoke test (silent install + uninstall)
         shell: pwsh
@@ -127,10 +127,10 @@ jobs:
           path: |
             tools/dl/rs
             tools/cargo-home/registry
-          key: rs-linux-${{ hashFiles('rs/fetch.sh', 'rs/Cargo.lock') }}
+          key: rs-linux-${{ hashFiles('src/fetch.sh', 'src/Cargo.lock') }}
           restore-keys: rs-linux-
 
-      # Runtime libraries only (what an Ubuntu desktop already has): rs/fetch.sh links against them through
+      # Runtime libraries only (what an Ubuntu desktop already has): src/fetch.sh links against them through
       # pkg-config stubs, so no -dev packages. cc is on the runner (a machine without it gets Zig from fetch.sh).
       # ./build.sh builds the .debs and the tarball, and cross-builds the Windows app as a check.
       - name: Build
@@ -142,7 +142,7 @@ jobs:
       - name: Unit tests
         run: |
           export PATH="$PWD/tools/rust/bin:$PATH" CARGO_HOME="$PWD/tools/cargo-home"
-          cargo test --manifest-path rs/Cargo.toml --release --locked -p ttlcd-core -p ttlcd-aura-hal -p ttlcd-setup
+          cargo test --manifest-path src/Cargo.toml --release --locked -p ttlcd-core -p ttlcd-aura-hal -p ttlcd-setup
 
       - name: Check firmware checksums
         run: cd firmware && sha256sum -c SHA256SUMS.txt

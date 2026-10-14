@@ -1,0 +1,14 @@
+# Intermediate output goes under build/target; src/build.* copies the finished files to build/<os>/.
+[build]
+target-dir = "../build/target"
+
+# Windows: link with llvm-mingw (tools/llvm-mingw/bin is put on PATH by the build scripts). Static CRT and libunwind,
+# so the exe needs no DLL beyond what Windows ships.
+[target.x86_64-pc-windows-gnullvm]
+linker = "x86_64-w64-mingw32-clang"
+rustflags = ["-C", "target-feature=+crt-static"]
+
+# 32-bit Windows (the Aura plugin: ASUS LightingService is a 32-bit process)
+[target.i686-pc-windows-gnullvm]
+linker = "i686-w64-mingw32-clang"
+rustflags = ["-C", "target-feature=+crt-static"]

@@ -5,7 +5,7 @@ built by reverse engineering TT RGB Plus.
 
 Owner rules:
 - **Install nothing.** Use only built-in OS tools and files inside this folder. The Rust toolchain is files in the
-  gitignored `tools/` (fetched by `rs/fetch.sh` / `rs/fetch.cmd`, pinned versions + SHA256), not an install.
+  gitignored `tools/` (fetched by `src/fetch.sh` / `src/fetch.cmd`, pinned versions + SHA256), not an install.
 - A driver is allowed only if this tool installs and uninstalls it.
 - Do the work yourself, with no "split the work".
 - Only Studio and its dependencies were rewritten (Rust, 2.0). `tools/`, `firmware/` and the rescue tools stay as they
@@ -39,24 +39,26 @@ Full conversation transcript (very long):
 
 ## Build
 
-Version 2.0 is Rust (`rs/`, a cargo workspace). The C# 1.x Studio (`src/`, `aura/`, `installer/`) is kept for
-reference and no longer built.
+Version 2.0 is Rust: `src/` is a cargo workspace. The C# 1.x Studio was removed; it is in the git history (tag/commit
+before 2.0, e.g. `ed769c0` = 1.3.3).
 
-- Toolchain: `rs/fetch.sh` (Linux host) / `rs/fetch.cmd` (Windows host; only curl.exe, tar.exe, certutil.exe) put
+- Toolchain: `src/fetch.sh` (Linux host) / `src/fetch.cmd` (Windows host; only curl.exe, tar.exe, certutil.exe) put
   Rust 1.98.0 (+ std for x86_64/i686 Windows) and llvm-mingw 20260922 into `tools/`; crates go to
-  `tools/cargo-home` (pinned by `rs/Cargo.lock`). Windows targets are `*-pc-windows-gnullvm` linked by llvm-mingw:
+  `tools/cargo-home` (pinned by `src/Cargo.lock`). Windows targets are `*-pc-windows-gnullvm` linked by llvm-mingw:
   no Visual Studio. On Linux the GTK/WebKitGTK crates link against the desktop's own runtime libraries through
   pkg-config stubs in `tools/linux-pc` (no `-dev` packages). Without a C compiler fetch.sh also brings Zig as linker.
-- `build.sh` (Linux host: Linux packages + Windows cross-build) and `build.cmd` (Windows host) call `rs/build.sh` /
-  `rs/build.cmd`. Intermediate files go to `build/rs-target/`. Outputs:
+- `build.sh` (Linux host: Linux packages + Windows cross-build) and `build.cmd` (Windows host) call `src/build.sh` /
+  `src/build.cmd`. Intermediate files go to `build/target/`. Outputs:
   - `build\windows\app\` = installed layout: `ttlcd.exe`, `TTLcdStudio.exe` (renamed `ttlcd-studio` bin),
     `TTLcdAura.dll` (i686) + `TTLcdAura64.dll`, `driver\`, `firmware\` (files from `firmware\` + `ttrescue.exe` and
     `PatchPanel.exe`, the C# tools from `extras/rescue` compiled with x86 `csc` on Windows or Mono `mcs` on Linux;
     the build checks PatchPanel rebuilds `lx800_tt021panel.bin` byte for byte).
   - `build\windows\TTLcdStudio-Setup.exe` = installer stub + payload packed by the host tool
-    `cargo run -p ttlcd-setup --bin ttlcd-pack -- <stub> build/windows/app <out>` (format in `rs/installer/src/pack.rs`).
+    `cargo run -p ttlcd-setup --bin ttlcd-pack -- <stub> build/windows/app <out>` (format in `src/installer/src/pack.rs`).
   - `build/linux/ttlcd_<ver>_amd64.deb`, `ttlcd-studio_<ver>_amd64.deb`, `ttlcd-<ver>-linux-x86_64.tar.gz`.
-- The version is `[workspace.package] version` in `rs/Cargo.toml`. In-use binaries are renamed to `*.old` before
+- `run.sh` (Linux) / `run.cmd` (Windows) run the new build from `build/` without installing: Studio, or
+  `run.sh ttlcd <command>` for the CLI; `--build` forces a rebuild (run.sh also rebuilds when sources are newer).
+- The version is `[workspace.package] version` in `src/Cargo.toml`. In-use binaries are renamed to `*.old` before
   copying (Windows). Binary names must differ by more than case.
 - Dev build by hand: `cd rs; export PATH=$PWD/../tools/rust/bin:$PWD/../tools/llvm-mingw/bin:$PATH
   CARGO_HOME=$PWD/../tools/cargo-home PKG_CONFIG_LIBDIR=$PWD/../tools/linux-pc/pkgconfig`, then
@@ -66,11 +68,11 @@ reference and no longer built.
 
 | Path | What |
 |---|---|
-| `rs/core/` | Everything UI-free: `hid/` (hidraw; SetupAPI + overlapped I/O, a timed-out read stays pending), `lcd.rs` (protocol; one lock per interface; `Global\TTLcd.Device` mutex on Windows, flock on Linux), `config.rs` (same `config.xml` as C#), `engine.rs` (render/send/control/game threads, 500 ms keep-alive, LX800 red/blue swap at send time), `render/` (tiny-skia + fontdb/rustybuzz text paths, round-panel fitting, effects), `aura.rs` (TTAS reader + visualiser), `model.rs` (Studio texts/panels/rotation/dashboard/LineDrag), `idle.rs`, `store.rs`, `sensors.rs`, `video.rs`, `capture.rs`, `games.rs`, `platform.rs`, `win/` (Windows: shared memory, registry, elevation, GDI capture, Media Foundation `mf.rs`, games, virtual display `vdd.rs`, `aura_install.rs`, `sensors.rs` helper/service) |
-| `rs/cli/` | `ttlcd` command line and screen service (`ttlcd run`) |
-| `rs/studio/` | Studio: wry/tao window, one HTML/CSS/JS UI in `ui/` served over a custom protocol (WebView2 on Windows with a built-in loader, no WebView2Loader.dll; WebKitGTK on Linux), tray (tray-icon), `os/linux.rs` + `os/windows.rs` |
-| `rs/aura-hal/` | `TTLcdAura.dll`: Armoury Crate HAL COM plugin written by hand (vtables), i686 + x86_64; `examples/probe.rs` self-test |
-| `rs/installer/` | `TTLcdStudio-Setup.exe` (Win32 UI, per-user install/uninstall) and `ttlcd-pack` |
+| `src/core/` | Everything UI-free: `hid/` (hidraw; SetupAPI + overlapped I/O, a timed-out read stays pending), `lcd.rs` (protocol; one lock per interface; `Global\TTLcd.Device` mutex on Windows, flock on Linux), `config.rs` (same `config.xml` as C#), `engine.rs` (render/send/control/game threads, 500 ms keep-alive, LX800 red/blue swap at send time), `render/` (tiny-skia + fontdb/rustybuzz text paths, round-panel fitting, effects), `aura.rs` (TTAS reader + visualiser), `model.rs` (Studio texts/panels/rotation/dashboard/LineDrag), `idle.rs`, `store.rs`, `sensors.rs`, `video.rs`, `capture.rs`, `games.rs`, `platform.rs`, `win/` (Windows: shared memory, registry, elevation, GDI capture, Media Foundation `mf.rs`, games, virtual display `vdd.rs`, `aura_install.rs`, `sensors.rs` helper/service) |
+| `src/cli/` | `ttlcd` command line and screen service (`ttlcd run`) |
+| `src/studio/` | Studio: wry/tao window, one HTML/CSS/JS UI in `ui/` served over a custom protocol (WebView2 on Windows with a built-in loader, no WebView2Loader.dll; WebKitGTK on Linux), tray (tray-icon), `os/linux.rs` + `os/windows.rs` |
+| `src/aura-hal/` | `TTLcdAura.dll`: Armoury Crate HAL COM plugin written by hand (vtables), i686 + x86_64; `examples/probe.rs` self-test |
+| `src/installer/` | `TTLcdStudio-Setup.exe` (Win32 UI, per-user install/uninstall) and `ttlcd-pack` |
 | `linux/` | Debian packaging: control files, udev rule, systemd user unit, desktop entry, icon |
 | `driver/` | Bundled MttVDD IddCx virtual 480×480 monitor (for Wallpaper Engine) |
 | `firmware/` | Shipped LCD firmware, base image, Nuvoton `FA93_musb.bin` helper, pin photo, `README.md` burn guide |
@@ -78,7 +80,7 @@ reference and no longer built.
 | `extras/re/` | Ghidra projects (`proj`), scripts (`scripts/*.java`), launchers (`run.cmd`, `runtw.cmd`, `runlx.cmd`), outputs (`out`) |
 | `extras/tools-src/` | Icon generator |
 | `tools/` | Not in git: portable Ghidra 12.1.4 + JDK 21, Nuvoton TurboWriter, driver downloads, the Rust toolchain |
-| `src/`, `aura/`, `installer/` | The C# 1.x Studio, reference only |
+| `src/app.ico` | The app icon, embedded into the Windows exes by the crates' build.rs |
 | `docs/protocol.md` | Protocol notes |
 
 ## Protocol (HKC / Xinyao LCD, both firmwares)
@@ -131,11 +133,11 @@ stopping the `ttlcd hwmon` helper, so the helper wasn't the cause. `ttlcd temp` 
   page and exits; `TTLCD_SHOT_SELECT=ClkItems:2` pre-selects a reading, `TTLCD_SHOT_HEIGHT` renders taller,
   `TTLCD_SHOT_JS` runs a script first. `TTLCD_NO_DEVICE=1` never opens the cooler (use it for every test run: a normal
   Studio start takes the cooler and, on Linux, stops the `ttlcd` service). `TTLCD_DEVTOOLS=1` = web inspector.
-- `--record` (README GIFs) exists only in the C# version.
+- `--record` (README GIFs) existed only in 1.x (git history).
 
 ## Game mode
 
-`rs/core/src/win/games.rs` detects games using only Windows sources:
+`src/core/src/win/games.rs` detects games using only Windows sources:
 - `SHQueryUserNotificationState` = D3D full-screen
 - the Xbox Game Bar list `HKCU\System\GameConfigStore\Children\*\MatchedExeFullPath`, matched against running
   processes

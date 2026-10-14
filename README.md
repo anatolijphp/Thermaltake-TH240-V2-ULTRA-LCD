@@ -142,8 +142,8 @@ GTK 3 and WebKitGTK 4.1 from the distribution.
 
 ## Build from source
 
-The app is written in Rust (`rs/`). The build fetches its own toolchain into `tools/` (Rust 1.98.0 and llvm-mingw,
-pinned by version and SHA256, `rs/fetch.sh` / `rs\fetch.cmd`), so there is nothing to install: no rustup, no Visual
+The app is written in Rust (`src/`). The build fetches its own toolchain into `tools/` (Rust 1.98.0 and llvm-mingw,
+pinned by version and SHA256, `src/fetch.sh` / `src\fetch.cmd`), so there is nothing to install: no rustup, no Visual
 Studio.
 
 ```
@@ -153,9 +153,19 @@ build.cmd                      # Windows: build\windows\
 ./build.sh [all|linux|windows] # Linux: build/linux/ and, cross-linked with llvm-mingw, build/windows/
 ```
 
+To try the new build without installing it:
+```
+run.cmd                        # Windows: Studio from build\windows\app (builds first if nothing is built)
+run.cmd ttlcd info             # Windows: the command-line tool
+./run.sh                       # Linux: Studio (rebuilds first when the sources are newer)
+./run.sh ttlcd info            # Linux: the command-line tool
+```
+`--build` as the first argument forces a rebuild. Studio takes over the cooler while it runs (on Linux it stops the
+`ttlcd` user service); close an installed Studio first.
+
 On Linux the build needs `curl`, `xz`, `dpkg` and the GTK 3 / WebKitGTK 4.1 runtime libraries a desktop already has
 (no `-dev` packages: it links through generated pkg-config stubs). Without a C compiler it fetches Zig as the linker.
-The version comes from `rs/Cargo.toml` (`[workspace.package]`).
+The version comes from `src/Cargo.toml` (`[workspace.package]`).
 
 | `build\windows\` | What |
 |---|---|
@@ -167,7 +177,7 @@ The version comes from `rs/Cargo.toml` (`[workspace.package]`).
 
 | `build/linux/` | What |
 |---|---|
-| `ttlcd_<version>_amd64.deb` | `ttlcd` (CLI + service), udev rule, systemd user service, rescue tool and firmware |
+| `ttlcd_<version>_amd64.deb` | `ttlcd` (CLI + service), udev rule, systemd user service |
 | `ttlcd-studio_<version>_amd64.deb` | `ttlcd-studio` (the window), menu entry, plus everything in `ttlcd` (replaces it) |
 | `ttlcd-<version>-linux-x86_64.tar.gz` | The same files for other distributions |
 | `pkg/`, `pkg-studio/` | The installed layouts |
@@ -200,24 +210,60 @@ The LCD has its own controller (Nuvoton W55FA93) behind a USB HID interface: one
 (brightness, rotation, sensor queries) and one for 480×480 JPEG frames. Studio renders each frame (mode, overlay,
 rotation), encodes it and streams it at up to 30 fps. The protocol is documented in [`docs/protocol.md`](docs/protocol.md).
 
-| Path | What |
-|---|---|
-| [`rs/core/`](rs/core) | Engine, protocol, rendering, config, sensors (shared by everything) |
-| [`rs/cli/`](rs/cli) | `ttlcd` command line and Linux screen service |
-| [`rs/studio/`](rs/studio) | The window (one HTML/JS UI in a WebView: WebView2 on Windows, WebKitGTK on Linux) and tray |
-| [`rs/aura-hal/`](rs/aura-hal) | Armoury Crate HAL plugin |
-| [`rs/installer/`](rs/installer) | Installer and uninstaller, and the packer that builds `TTLcdStudio-Setup.exe` |
-| [`linux/`](linux) | Debian packaging: control files, udev rule, systemd user unit, desktop entry |
-| [`driver/`](driver) | Bundled MttVDD virtual display driver (signed, MIT) |
-| [`firmware/`](firmware) | LCD controller firmware and the burn guide |
-| [`src/`](src), [`aura/`](aura), [`installer/`](installer) | The C# Studio (1.x), kept for reference; no longer built |
-| [`docs/`](docs) | Protocol notes and README media |
-| [`extras/`](extras) | Tools not part of Studio: [`rescue/`](extras/rescue) (C# `ttrescue` + `PatchPanel` for the firmware rescue; built into the Windows app's `firmware\` folder), [`re/`](extras/re) (Ghidra launchers and scripts used for the reverse engineering), [`tools-src/`](extras/tools-src) (icon generator) |
+## Project layout
+
+```
+ttlcd/
+├── build.sh, build.cmd     Build everything (Linux host / Windows host); they call src/build.*
+├── run.sh, run.cmd         Run the new build from build/ without installing
+├── README.md, CLAUDE.md    This file; developer handover notes (hardware state, protocol, layout)
+│
+├── src/                    The app (Rust, one cargo workspace)
+│   ├── Cargo.toml/.lock    Workspace, version, pinned dependencies
+│   ├── .cargo/config.toml  Output folder and Windows linker settings (llvm-mingw, static CRT)
+│   ├── fetch.sh, fetch.cmd Download the pinned toolchain into tools/ (SHA256-checked)
+│   ├── build.sh, build.cmd The build: binaries, Windows app folder and installer, Linux packages
+│   ├── app.ico             App icon (embedded into the Windows exes)
+│   ├── core/               Shared library, no UI:
+│   │   ├── hid/              USB HID access (Linux hidraw, Windows SetupAPI)
+│   │   ├── lcd.rs            Cooler protocol: frames, brightness, rotation, queries, idle picture
+│   │   ├── engine.rs         Render / send / control / game-detection threads
+│   │   ├── render/           Frames: text from system fonts, round-panel fitting, effects
+│   │   ├── config.rs         Settings (config.xml)
+│   │   ├── model.rs, idle.rs What Studio shows: texts, panels, rotation, line editor, idle picture
+│   │   ├── aura.rs           Aura Sync state reader and visualiser
+│   │   └── win/              Windows only: screen capture, video, game detection, virtual display,
+│   │                         Aura plugin install, CPU temperature service
+│   ├── cli/                ttlcd: command line and Linux screen service (ttlcd run)
+│   ├── studio/             TT LCD Studio: window and tray
+│   │   ├── ui/               The interface (index.html, style.css, app.js), the same on both systems
+│   │   └── src/os/           System-specific parts (linux.rs, windows.rs, WebView2 loader)
+│   ├── aura-hal/           TTLcdAura.dll: Armoury Crate / Aura Sync plugin (32- and 64-bit)
+│   └── installer/          TTLcdStudio-Setup.exe and ttlcd-pack (packs the app into the installer)
+│
+├── linux/                  Debian packaging: control files, udev rule, systemd user unit, desktop entry, icon
+├── driver/                 Bundled MttVDD virtual 480×480 display driver (signed, MIT)
+├── firmware/               LCD controller firmware, Nuvoton helper, pin photo and the burn guide
+├── docs/                   Protocol notes and README media
+├── .github/workflows/      CI: Windows and Linux builds, tests, releases
+│
+├── extras/                 Tools that are not part of Studio
+│   ├── rescue/               ttrescue (firmware recovery) and PatchPanel, C#; built into app\firmware\
+│   ├── re/                   Reverse engineering: Ghidra launchers and scripts
+│   └── tools-src/            Icon generator
+│
+├── tools/                  (not in git) Toolchain and reverse-engineering tools, fetched or copied locally
+└── build/                  (not in git) Output: windows/app/, windows/TTLcdStudio-Setup.exe, linux/*.deb,
+                            and target/ (compiler intermediate files)
+```
+
+`core` is the base that `cli` and `studio` share. `aura-hal` is standalone: it runs inside ASUS LightingService and
+only shares the memory layout with `core`. `installer` packs whatever is in `build/windows/app/`.
 
 <details>
 <summary>README media</summary>
 
-The GIFs above were recorded with the C# version (1.x, `--record` in `src/Record.cs` and `src/gtk/Record.cs`).
+The GIFs above were recorded with version 1.x (C#, in the git history before 2.0).
 The Rust Studio renders single pages with `--screenshot <png> <dashboard|modes[:Mode]|device|settings|idle>`, which
 CI runs on both systems.
 </details>

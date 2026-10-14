@@ -8,4 +8,4 @@ linux/* text eol=lf
 *.ico binary
 # batch files: CRLF, so cmd.exe finds every :label (its label search can miss labels in LF-only files)
 /*.cmd text eol=crlf
-/rs/*.cmd text eol=crlf
+/src/*.cmd text eol=crlf
