@@ -48,7 +48,7 @@ export default function App() {
         closeAllCombos();
       }
     };
-    const menu = (e) => { if (!e.target.closest('input')) e.preventDefault(); };
+    const menu = (e) => { if (!window.TTLCD_DEVTOOLS && !e.target.closest('input')) e.preventDefault(); };
     document.addEventListener('keydown', key);
     document.addEventListener('contextmenu', menu);
     return () => { document.removeEventListener('keydown', key); document.removeEventListener('contextmenu', menu); };

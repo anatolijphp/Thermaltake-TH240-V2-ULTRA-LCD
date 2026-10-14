@@ -182,11 +182,14 @@ fn main() -> wry::Result<()> {
     let mut web_context = wry::WebContext::new(Some(ttlcd_core::config::local_folder().join(if cfg!(windows) { "WebView2" } else { "webkit" })));
     let ipc_proxy = proxy.clone();
     let pb = blobs.clone();
+    // TTLCD_DEVTOOLS=1: the web inspector opens with the window, and right-click works everywhere (Inspect Element)
+    let devtools = std::env::var("TTLCD_DEVTOOLS").is_ok_and(|v| v == "1");
     let builder = WebViewBuilder::new_with_web_context(&mut web_context)
         .with_custom_protocol("ttlcd".into(), move |_id, req| serve(&pb, &req))
         .with_url(format!("{}index.html", os::ui_base_url()))
         .with_background_color((7, 7, 7, 255))
-        .with_devtools(std::env::var("TTLCD_DEVTOOLS").is_ok_and(|v| v == "1"))
+        .with_devtools(devtools)
+        .with_initialization_script(if devtools { "window.TTLCD_DEVTOOLS=true" } else { "" })
         // files dragged into the window: handled here (real paths; the page only shows the feedback)
         .with_drag_drop_handler({
             let p = proxy.clone();
@@ -215,6 +218,9 @@ fn main() -> wry::Result<()> {
     };
     #[cfg(not(target_os = "linux"))]
     let webview = builder.build(&window)?;
+    if devtools && shot.is_none() {
+        webview.open_devtools();
+    }
     // dropped before exiting, so the web engine shuts its page process down cleanly (see the quit path)
     let mut webview = Some(webview);
 
