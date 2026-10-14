@@ -207,14 +207,12 @@ rotation), encodes it and streams it at up to 30 fps. The protocol is documented
 | [`rs/studio/`](rs/studio) | The window (one HTML/JS UI in a WebView: WebView2 on Windows, WebKitGTK on Linux) and tray |
 | [`rs/aura-hal/`](rs/aura-hal) | Armoury Crate HAL plugin |
 | [`rs/installer/`](rs/installer) | Installer and uninstaller, and the packer that builds `TTLcdStudio-Setup.exe` |
-| [`rs/rescue/`](rs/rescue), [`rs/patchpanel/`](rs/patchpanel) | Firmware tools (`ttrescue`, `PatchPanel`) |
 | [`linux/`](linux) | Debian packaging: control files, udev rule, systemd user unit, desktop entry |
 | [`driver/`](driver) | Bundled MttVDD virtual display driver (signed, MIT) |
 | [`firmware/`](firmware) | LCD controller firmware and the burn guide |
-| [`src/`](src), [`aura/`](aura), [`installer/`](installer), [`rescue/`](rescue) | The C# version (1.x), kept for reference; no longer built |
+| [`src/`](src), [`aura/`](aura), [`installer/`](installer) | The C# Studio (1.x), kept for reference; no longer built |
 | [`docs/`](docs) | Protocol notes and README media |
-| [`re/scripts/`](re/scripts) | Ghidra scripts used for the reverse engineering |
-| [`tools-src/`](tools-src) | Icon generator |
+| [`extras/`](extras) | Tools not part of Studio: [`rescue/`](extras/rescue) (C# `ttrescue` + `PatchPanel` for the firmware rescue; built into the Windows app's `firmware\` folder), [`re/`](extras/re) (Ghidra launchers and scripts used for the reverse engineering), [`tools-src/`](extras/tools-src) (icon generator) |
 
 <details>
 <summary>README media</summary>

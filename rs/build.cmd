@@ -7,8 +7,9 @@ rem     TTLcdStudio.exe                      Studio window + tray (WebView2, loa
 rem     TTLcdAura.dll                        Armoury Crate / Aura Sync HAL plugin, 32-bit (ASUS LightingService)
 rem     TTLcdAura64.dll                      the same plugin, 64-bit
 rem     driver\                              virtual display driver (copied from driver\)
-rem     firmware\ttrescue.exe                firmware read/write tool for the LCD controller's ROM recovery mode
-rem     firmware\PatchPanel.exe              rebuilds lx800_tt021panel.bin from firmware\make_fix.bin
+rem     firmware\ttrescue.exe                firmware read/write tool for the LCD controller's ROM recovery mode (C#, x86)
+rem     firmware\PatchPanel.exe              rebuilds lx800_tt021panel.bin from firmware\make_fix.bin (C#, x86)
+rem     (both from extras\rescue, unchanged, compiled with the csc that ships with Windows)
 rem     firmware\...                         firmware image, Nuvoton helper, burn guide (copied from firmware\)
 rem   build\windows\TTLcdStudio-Setup.exe    installer stub with build\windows\app as payload
 rem The Linux packages are built on Linux (build.sh). Names must differ by more than case.
@@ -40,12 +41,18 @@ set "VER=%VER:"=%"
 echo TT LCD %VER%
 
 echo [1/5] cargo build (x86_64)
-cargo build --release --locked --target %W% -p ttlcd-cli -p ttlcd-studio -p ttlcd-aura-hal -p ttlcd-rescue -p ttlcd-patchpanel -p ttlcd-setup || exit /b 1
+cargo build --release --locked --target %W% -p ttlcd-cli -p ttlcd-studio -p ttlcd-aura-hal -p ttlcd-setup || exit /b 1
 echo [2/5] cargo build (i686 Aura plugin: ASUS LightingService is a 32-bit process)
 cargo build --release --locked --target %W32% -p ttlcd-aura-hal || exit /b 1
 
-echo [3/5] PatchPanel check
-"%R%\PatchPanel.exe" "%ROOT%\firmware\make_fix.bin" "%TGT%\lx800_tt021panel.check.bin" >nul || exit /b 1
+echo [3/5] extras\rescue (C#, x86 csc: SCSI_PASS_THROUGH_DIRECT with TurboWriter's 32-bit layout)
+set "CSC32=%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+if not exist "%APP%\firmware" mkdir "%APP%\firmware"
+del /q "%APP%\firmware\*.old" >nul 2>nul
+for %%f in (ttrescue.exe PatchPanel.exe) do if exist "%APP%\firmware\%%f" ren "%APP%\firmware\%%f" "%%f.%RANDOM%.old"
+"%CSC32%" /nologo /optimize+ /platform:x86 /target:exe /out:"%APP%\firmware\ttrescue.exe" /r:System.Core.dll "%ROOT%\extras\rescue\Rescue.cs" || exit /b 1
+"%CSC32%" /nologo /optimize+ /platform:x86 /target:exe /out:"%APP%\firmware\PatchPanel.exe" "%ROOT%\extras\rescue\PatchPanel.cs" || exit /b 1
+"%APP%\firmware\PatchPanel.exe" "%ROOT%\firmware\make_fix.bin" "%TGT%\lx800_tt021panel.check.bin" >nul || exit /b 1
 set WANT=
 for /f "usebackq tokens=1,2" %%a in ("%ROOT%\firmware\SHA256SUMS.txt") do if "%%b"=="lx800_tt021panel.bin" set "WANT=%%a"
 call :sha256 "%TGT%\lx800_tt021panel.check.bin"
@@ -60,7 +67,7 @@ rem A running exe or loaded DLL can't be overwritten (Studio, the sensors servic
 rem plugin), but it can be renamed. So move the current binaries aside, copy fresh ones, and delete the leftovers
 rem that are no longer in use (the rest go on a later build).
 del /q "%APP%\*.old" "%APP%\firmware\*.old" >nul 2>nul
-for %%f in (ttlcd.exe TTLcdStudio.exe TTLcdAura.dll TTLcdAura64.dll firmware\ttrescue.exe firmware\PatchPanel.exe) do if exist "%APP%\%%f" ren "%APP%\%%f" "%%~nxf.%RANDOM%.old"
+for %%f in (ttlcd.exe TTLcdStudio.exe TTLcdAura.dll TTLcdAura64.dll) do if exist "%APP%\%%f" ren "%APP%\%%f" "%%~nxf.%RANDOM%.old"
 del /q "%APP%\*.old" "%APP%\firmware\*.old" >nul 2>nul
 copy /y "%R%\ttlcd.exe" "%APP%\ttlcd.exe" >nul || exit /b 1
 copy /y "%R%\ttlcd-studio.exe" "%APP%\TTLcdStudio.exe" >nul || exit /b 1
@@ -69,8 +76,6 @@ copy /y "%R%\TTLcdAura.dll" "%APP%\TTLcdAura64.dll" >nul || exit /b 1
 rem Studio carries its own WebView2 loader; it must not need Microsoft's WebView2Loader.dll next to it
 llvm-objdump -p "%APP%\TTLcdStudio.exe" | findstr /i /c:"DLL Name: WebView2Loader.dll" >nul
 if not errorlevel 1 (echo TTLcdStudio.exe imports WebView2Loader.dll; the app ships without it & exit /b 1)
-copy /y "%R%\ttrescue.exe" "%APP%\firmware\" >nul || exit /b 1
-copy /y "%R%\PatchPanel.exe" "%APP%\firmware\" >nul || exit /b 1
 for %%f in (MttVDD.inf MttVDD.dll mttvdd.cat) do copy /y "%ROOT%\driver\%%f" "%APP%\driver\" >nul || exit /b 1
 for %%f in (README.md lx800_tt021panel.bin FA93_musb.bin hardware_boot_pins.jpg SHA256SUMS.txt) do copy /y "%ROOT%\firmware\%%f" "%APP%\firmware\" >nul || exit /b 1
 

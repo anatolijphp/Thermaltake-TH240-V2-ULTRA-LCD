@@ -2523,18 +2523,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ttlcd-patchpanel"
-version = "2.0.0"
-
-[[package]]
-name = "ttlcd-rescue"
-version = "2.0.0"
-dependencies = [
- "libc",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "ttlcd-setup"
 version = "2.0.0"
 dependencies = [

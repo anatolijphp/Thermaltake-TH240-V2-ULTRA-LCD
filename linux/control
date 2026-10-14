@@ -11,6 +11,5 @@ Description: Screen software for the Thermaltake TH240 V2 Ultra (CL-W383) LCD
  Drives the cooler's round 2.1" LCD without TT RGB Plus: a clock and sensor
  face (coolant temperature from the cooler, CPU temperature and load), an
  image, an animated GIF or a colour. Command-line tool (ttlcd) plus a systemd
- user service (systemctl --user enable --now ttlcd). Also carries the LCD
- controller's rescue tool and firmware (/usr/lib/ttlcd/firmware). The
- window (ttlcd-studio) is the separate ttlcd-studio package.
+ user service (systemctl --user enable --now ttlcd). The window
+ (ttlcd-studio) is the separate ttlcd-studio package.

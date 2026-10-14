@@ -10,9 +10,9 @@
 /tools/
 
 # reverse-engineering workspace: Ghidra projects, outputs and vendor binaries stay local
-/re/*
-!/re/scripts/
-!/re/*.cmd
+/extras/re/*
+!/extras/re/scripts/
+!/extras/re/*.cmd
 
 # flash dumps and logs (the firmware we ship is in firmware/, see the exception below)
 *.bin

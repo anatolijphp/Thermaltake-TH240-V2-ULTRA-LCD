@@ -16,5 +16,5 @@ Description: TT LCD Studio window for the Thermaltake TH240 V2 Ultra (CL-W383) L
  clock, Aura Sync, off), device and settings pages and the idle picture,
  plus a tray icon (libayatana-appindicator3). Complete on its own: it also
  contains everything in the ttlcd package (the ttlcd command, the systemd
- user service, the udev rule and the rescue tool) and replaces it, so this
+ user service and the udev rule) and replaces it, so this
  one file installs from the Ubuntu App Center too.

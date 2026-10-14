@@ -24,8 +24,8 @@ jobs:
           key: rs-windows-${{ hashFiles('rs/fetch.cmd', 'rs/Cargo.lock') }}
           restore-keys: rs-windows-
 
-      # build\windows\app (the installed layout) and build\windows\TTLcdStudio-Setup.exe; also checks that PatchPanel
-      # rebuilds firmware\lx800_tt021panel.bin byte for byte
+      # build\windows\app (the installed layout) and build\windows\TTLcdStudio-Setup.exe; also compiles extras\rescue (C#) and checks
+      # that PatchPanel rebuilds firmware\lx800_tt021panel.bin byte for byte
       - name: Build
         shell: cmd
         run: build.cmd
@@ -139,10 +139,10 @@ jobs:
           sudo apt-get install -y -qq --no-install-recommends libwebkit2gtk-4.1-0 libgtk-3-0t64 >/dev/null
           ./build.sh
 
-      - name: Unit tests (PatchPanel byte identity, rescue protocol)
+      - name: Unit tests
         run: |
           export PATH="$PWD/tools/rust/bin:$PATH" CARGO_HOME="$PWD/tools/cargo-home"
-          cargo test --manifest-path rs/Cargo.toml --release --locked -p ttlcd-patchpanel -p ttlcd-rescue
+          cargo test --manifest-path rs/Cargo.toml --release --locked -p ttlcd-core -p ttlcd-aura-hal -p ttlcd-setup
 
       - name: Check firmware checksums
         run: cd firmware && sha256sum -c SHA256SUMS.txt
@@ -167,8 +167,6 @@ jobs:
             ttlcd config | grep -q "Mode = Clock"
             ttlcd probe || true
             test -s /tmp/clock.jpg && test -f /lib/udev/rules.d/60-ttlcd.rules && test -f /usr/lib/systemd/user/ttlcd.service
-            test -x /usr/lib/ttlcd/firmware/ttrescue && test -f /usr/lib/ttlcd/firmware/FA93_musb.bin
-            (cd /usr/lib/ttlcd/firmware && sha256sum -c SHA256SUMS.txt --ignore-missing)
             # ttlcd-studio contains and replaces ttlcd: installing it over ttlcd must keep the command, unit and rule
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd-studio_*_amd64.deb xvfb xauth fonts-ubuntu dbus-x11 >/dev/null
             ! dpkg -s ttlcd 2>/dev/null | grep -q "^Status: install ok"
