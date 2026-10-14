@@ -145,6 +145,10 @@ impl Studio {
             full: false,
         };
         // first run: the current live rotation is taken as "upright on this mount" for the preview
+        // "Keep going" is no longer offered: switching detection off does the same
+        if s.engine.config().GameAction == ttlcd_core::config::GameAction::None {
+            s.change(|c| c.GameAction = ttlcd_core::config::GameAction::LowerFps);
+        }
         if s.engine.config().PreviewMount < 0 {
             let r0 = s.engine.config().Rotation;
             s.change(|c| c.PreviewMount = r0);
@@ -820,10 +824,16 @@ impl Studio {
     fn update_suspend(&mut self) {
         let on = self.idle_view && self.visible;
         if self.engine.suspended() != on {
-            self.engine.set_suspended(on);
+            if on {
+                // the LCD switches at once: a last frame that looks like the cooler's idle screen, then nothing,
+                // until the firmware's own idle screen (the same picture) takes over after its no-frames timeout
+                self.engine.suspend_with(idle::lcd_frame(self.engine.coolant()));
+            } else {
+                self.engine.set_suspended(false);
+            }
         }
         if on && !self.idle.lock().unwrap().busy {
-            self.idle_status = "Streaming paused: the cooler shows its idle screen now (after a few seconds).".into();
+            self.idle_status = "Streaming paused: the cooler shows its idle screen.".into();
         }
     }
 

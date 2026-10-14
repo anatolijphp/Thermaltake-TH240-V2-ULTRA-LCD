@@ -20,6 +20,7 @@ const USAGE: &str = "ttlcd - Thermaltake CL-W383 LCD tool
   ttlcd idle <file> [-rot 0] [-q 85]  store the idle (standby) screen in the cooler: picture/GIF/video frame
   ttlcd files [folder]                list files stored in the cooler (read-only)
   ttlcd monitors                      list monitors
+  ttlcd games                         what game detection sees right now
   ttlcd stream [-m N] [-r x,y,w,h] [-fps 30] [-q 80]
                                       mirror a monitor (default: the 480x480 one) or region
   ttlcd display install|uninstall|status   virtual 480x480 monitor for Wallpaper Engine (admin)
@@ -120,6 +121,15 @@ fn run(cmd: &str, a: &[String]) -> R {
             Ok(0)
         }
         "stream" => stream(a),
+        "games" => {
+            // what game detection sees now (with the saved detection settings)
+            let c = Config::load();
+            match ttlcd_core::games::detect(&c) {
+                Some(g) => println!("game running: {g}"),
+                None => println!("no game detected"),
+            }
+            Ok(0)
+        }
         #[cfg(windows)]
         "display" => ttlcd_core::win::vdd::run(arg(a, 1)?).map_err(s),
         #[cfg(windows)]

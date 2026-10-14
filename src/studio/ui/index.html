@@ -222,17 +222,17 @@
           <div class="caption">GAME MODE</div>
           <p class="sub tight">Lowers the load while you play: fewer frames to the cooler and slower sensor polling, or no streaming at all (the cooler then shows its own idle screen).</p>
           <label class="switch gap" data-k="GameDetect" id="gmOn"><span class="track"><span class="knob"></span></span><span class="txt">Detect running games</span></label>
-          <label class="switch gap2" id="gmForce" title="For games that aren't detected"><span class="track"><span class="knob"></span></span><span class="txt">Game mode on now (also the gamepad button in the title bar)</span></label>
+          <p class="sub tight">For a game that isn't detected, the gamepad button in the title bar turns game mode on by hand.</p>
           <div id="gmOptions">
             <div class="grow3 wide top" id="gmDetectRow"><span class="lbl">Detect</span>
               <div class="wrap">
-                <button class="chip" data-k="GameFullscreen" title="Exclusive full-screen Direct3D games (what Windows reports to hold back notifications)">Full-screen games</button>
-                <button class="chip" data-k="GameKnownList" title="Games the Xbox Game Bar has recorded on this PC (includes borderless and windowed games)">Games known to Windows</button>
-                <button class="chip" data-k="GameBorderless" title="Any app covering its whole monitor in the foreground; also triggers on full-screen video">Any full-screen window</button>
+                <button class="chip" data-k="GameFullscreen" id="gmChipFs" title="Exclusive full-screen Direct3D games (what Windows reports to hold back notifications)">Full-screen games</button>
+                <button class="chip" data-k="GameKnownList" id="gmChipKnown" title="Games the Xbox Game Bar has recorded on this PC (includes borderless and windowed games)">Games known to Windows</button>
+                <button class="chip" data-k="GameBorderless" id="gmChipAny" title="Any app covering its whole monitor in the foreground; also triggers on full-screen video">Any full-screen window</button>
               </div></div>
             <div class="grow3 wide" id="gmExtraRow"><span class="lbl">Also these apps</span><input type="text" data-text="GameExtra" title="Exe names, comma separated, for example: eldenring.exe, cs2"></div>
             <div class="grow3 wide"><span class="lbl">While a game runs</span>
-              <div class="seg" data-k="GameAction"><button data-v="None">Keep going</button><button data-v="LowerFps">Lower frame rate</button><button data-v="IdleScreen">Show idle screen</button></div></div>
+              <div class="seg" data-k="GameAction"><button data-v="LowerFps">Lower frame rate</button><button data-v="IdleScreen">Show idle screen</button></div></div>
             <div class="grow3 wide" id="gmFpsRow"><span class="lbl">Game frame rate</span><div class="slider" data-k="GameFps" data-min="1" data-max="30" data-step="1" data-unit=" fps"></div><span class="val"></span></div>
             <div class="grow3 wide"><span class="lbl">Sensor updates</span><div class="slider" data-k="GameSensorMs" data-scale="1000" data-min="2" data-max="60" data-step="1" data-unit=" s"></div><span class="val"></span></div>
             <div class="grow3 wide" id="gmIgnoreRow"><span class="lbl">Ignore these apps</span><input type="text" data-text="GameIgnore" title="Exe names never treated as games, comma separated, for example: BongoCat"></div>

@@ -96,9 +96,9 @@ fn autostart_file() -> PathBuf {
     cfg.join("autostart/ttlcd-studio.desktop")
 }
 
-/// Automatic game detection is available (Windows).
+/// Automatic game detection is available (Windows; Linux: Steam/Wine processes and full-screen X11 windows).
 pub fn game_detection() -> bool {
-    cfg!(windows)
+    cfg!(any(windows, target_os = "linux"))
 }
 
 /// CPU temperature needs a one-time install (dashboard hint): the Windows sensor service.

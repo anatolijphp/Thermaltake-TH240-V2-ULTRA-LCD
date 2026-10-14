@@ -1,5 +1,5 @@
-//! Game detection, using only what Windows provides (see win/games.rs for the sources). Other systems: none (game
-//! mode can still be forced on by hand).
+//! Game detection: Windows sources in win/games.rs, Linux sources in linux_games.rs (game mode can always be forced
+//! on by hand too).
 use crate::config::Config;
 
 /// Name of the detected game (exe without extension), or None.
@@ -8,7 +8,11 @@ pub fn detect(c: &Config) -> Option<String> {
     {
         crate::win::games::detect(c)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        crate::linux_games::detect(c)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = c;
         None

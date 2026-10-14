@@ -122,6 +122,33 @@ impl IdleEditor {
     }
 }
 
+/// What the cooler's own idle screen shows: the stored picture with the coolant temperature over it (the LX800
+/// firmware draws the number centred about 100 px from the top, a small degree sign, then the unit). Upright.
+/// Sent as the last live frame when streaming stops, so the LCD changes at once instead of only after the
+/// firmware's no-frames timeout; then the firmware's own idle screen takes over showing the same picture.
+pub fn lcd_frame(coolant: f64) -> Option<tiny_skia::Pixmap> {
+    use crate::render::{paint, rgb, text::fonts};
+    let pic = render::decode(&stored()?)?;
+    let mut p = render::compose(Some(&pic), false, 0);
+    if crate::render::readings::water_valid(coolant) {
+        let f = fonts();
+        let (fam, big, small, top) = ("Segoe UI", 94.0f32, 47.0f32, 92.0f32);
+        let num = format!("{}", coolant.round_ties_even() + 0.0);
+        let (wn, wd, wc) = (f.width(fam, false, big, &num), f.width(fam, false, small, "°"), f.width(fam, false, big, "C"));
+        let mut x = (480.0 - wn - wd - wc) / 2.0;
+        let pt = paint(rgb(0xFFFFFF));
+        let shadow = paint(crate::render::rgba(0, 0, 0, 140));
+        for (t, size, y) in [(num.as_str(), big, top), ("°", small, top + 6.0), ("C", big, top)] {
+            if let Some(path) = f.path(fam, false, false, size, x, y, t) {
+                p.fill_path(&path, &shadow, tiny_skia::FillRule::Winding, tiny_skia::Transform::from_translate(2.0, 2.0), None);
+                p.fill_path(&path, &pt, tiny_skia::FillRule::Winding, tiny_skia::Transform::identity(), None);
+            }
+            x += f.width(fam, false, size, t);
+        }
+    }
+    Some(p)
+}
+
 pub fn store_progress_text(p: i32) -> &'static str {
     if p < 80 { "Writing to the cooler, do not unplug" } else { "Checking the written image" }
 }
@@ -200,4 +227,16 @@ pub fn store(ed: &Arc<Mutex<IdleEditor>>, engine: &Engine, progress: impl FnMut(
             }
         }),
     });
+}
+
+#[cfg(test)]
+mod tests {
+    /// TTLCD_DUMP=<file.jpg> cargo test -p ttlcd-core dump_lcd_frame -- --ignored: the idle-look frame for checking
+    #[test]
+    #[ignore]
+    fn dump_lcd_frame() {
+        let out = std::env::var("TTLCD_DUMP").unwrap_or_else(|_| "idle-frame.jpg".into());
+        let p = super::lcd_frame(31.0).expect("no stored idle picture (idle-current.jpg)");
+        std::fs::write(out, crate::render::jpeg(&p, 90, false)).unwrap();
+    }
 }

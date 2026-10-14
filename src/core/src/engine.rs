@@ -94,6 +94,7 @@ struct Shared {
     hw_rotation: AtomicI32,    // the cooler's stored rotation in degrees, -1 until read after connecting
     jobs: Mutex<VecDeque<DeviceJob>>,
     session: AtomicU64, // current connection; the control thread runs while it matches
+    suspend_seq: AtomicU64, // a last frame to send before suspending (0 = none)
     video: Mutex<VideoSlot>,
     threads: Mutex<Vec<JoinHandle<()>>>,
 }
@@ -155,6 +156,7 @@ impl Engine {
             hw_rotation: AtomicI32::new(-1),
             jobs: Mutex::new(VecDeque::new()),
             session: AtomicU64::new(0),
+            suspend_seq: AtomicU64::new(0),
             video: Mutex::new(VideoSlot::default()),
             threads: Mutex::new(Vec::new()),
         }))
@@ -179,7 +181,32 @@ impl Engine {
     pub fn suspended(&self) -> bool {
         self.0.suspended.load(SeqCst)
     }
+    /// Suspends after sending `last` (upright; turned like live frames) as the final frame: the LCD shows it at
+    /// once and keeps it until the firmware's own idle screen takes over. None: suspend right away.
+    pub fn suspend_with(&self, last: Option<Pixmap>) {
+        let Some(p) = last else { return self.set_suspended(true) };
+        let c = self.config();
+        let p = render::rotate(&p, c.Rotation);
+        let q = c.Quality.max(85);
+        let jpeg = render::jpeg(&p, q, false);
+        {
+            let mut latest = self.0.latest.lock().unwrap();
+            self.0.suspended.store(false, SeqCst);
+            let seq = self.0.seq.fetch_add(1, SeqCst) + 1;
+            self.0.suspend_seq.store(seq, SeqCst); // from here the renderer publishes nothing newer
+            *latest = Some(Arc::new(Frame { jpeg: Arc::new(jpeg), rgba: Some(Arc::new(p)), rotation: c.Rotation, seq, quality: q }));
+        }
+        self.0.new_frame.set();
+        if !self.connected() {
+            self.0.suspend_seq.store(0, SeqCst);
+            self.set_suspended(true);
+        }
+    }
+
     pub fn set_suspended(&self, v: bool) {
+        if !v {
+            self.0.suspend_seq.store(0, SeqCst);
+        }
         self.0.suspended.store(v, SeqCst);
         if v {
             set_f64(&self.0.fps, 0.0);
@@ -312,8 +339,14 @@ impl Engine {
 
     // ================= renderer =================
     fn publish(&self, jpeg: Vec<u8>, rgba: Option<Pixmap>, rotation: i32, quality: i32) {
+        let mut latest = self.0.latest.lock().unwrap();
+        // a frame rendered while streaming is being suspended must not replace the last (idle) frame
+        if self.0.suspended.load(SeqCst) || self.0.suspend_seq.load(SeqCst) != 0 {
+            return;
+        }
         let seq = self.0.seq.fetch_add(1, SeqCst) + 1;
-        *self.0.latest.lock().unwrap() = Some(Arc::new(Frame { jpeg: Arc::new(jpeg), rgba: rgba.map(Arc::new), rotation, seq, quality }));
+        *latest = Some(Arc::new(Frame { jpeg: Arc::new(jpeg), rgba: rgba.map(Arc::new), rotation, seq, quality }));
+        drop(latest);
         self.0.new_frame.set();
     }
 
@@ -345,6 +378,12 @@ impl Engine {
         let mut blank = false;
         while !self.quit() {
             let c = self.config();
+            if self.suspended() || self.0.suspend_seq.load(SeqCst) != 0 {
+                // the cooler shows its own idle screen: nothing to render
+                self.set_render_status("Cooler shows its idle screen".into());
+                thread::sleep(Duration::from_millis(50));
+                continue;
+            }
             if self.paused() {
                 // freeze: render nothing new; the sender keeps re-sending the last frame (keep-alive)
                 self.set_render_status("Paused".into());
@@ -589,6 +628,11 @@ impl Engine {
                 Ok(()) => {
                     sent_seq = f.seq;
                     last_sent = ms();
+                    let last = self.0.suspend_seq.load(SeqCst);
+                    if last != 0 && f.seq >= last {
+                        self.0.suspend_seq.store(0, SeqCst);
+                        self.0.suspended.store(true, SeqCst);
+                    }
                     self.0.connected.store(true, SeqCst);
                     fps_n += 1;
                     let now = ms();

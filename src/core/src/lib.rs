@@ -8,6 +8,8 @@ pub mod games;
 pub mod hid;
 pub mod idle;
 pub mod lcd;
+#[cfg(target_os = "linux")]
+mod linux_games;
 pub mod media;
 pub mod model;
 pub mod platform;

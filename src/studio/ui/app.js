@@ -104,6 +104,12 @@ function placePill(seg, animate) {
 }
 
 // ---------------- sliders (thin track, gradient fill, diamond thumb) ----------------
+// Calls fn at once, then at most every `ms` while calls keep coming; the last call is always delivered.
+function throttle(fn, ms) {
+  let timer = null, pending = null;
+  const run = () => { timer = null; if (pending) { const a = pending; pending = null; fn(...a); timer = setTimeout(run, ms); } };
+  return (...a) => { pending = a; if (!timer) run(); };
+}
 class Slider {
   constructor(el, onInput) {
     this.el = el;
@@ -232,7 +238,8 @@ function buildGauges() {
       '<text class="glabel" x="78" y="138" fill="' + color + '">' + label + '</text></svg>';
     host.appendChild(card);
   });
-  new ResizeObserver(() => send({ t: 'gw', w: host.clientWidth + 14 })).observe(host);
+  const gw = throttle(() => send({ t: 'gw', w: host.clientWidth + 14 }), 100);
+  new ResizeObserver(gw).observe(host);
 }
 function applyDash(d) {
   if (!S) return;
@@ -415,12 +422,8 @@ function buildSwatches() {
     c.className = 'sw custom';
     c.title = 'Custom colour…';
     c.innerHTML = '<input type="color">';
-    let timer = 0;
-    c.firstChild.addEventListener('input', (e) => {
-      clearTimeout(timer);
-      const v = parseInt(e.target.value.slice(1), 16);
-      timer = setTimeout(() => pick(v), 60);
-    });
+    const pickT = throttle(pick, 60); // the colour follows while dragging in the picker
+    c.firstChild.addEventListener('input', (e) => pickT(parseInt(e.target.value.slice(1), 16)));
     host.appendChild(c);
   });
 }
@@ -562,6 +565,12 @@ function applyState(s) {
   const detect = P.gameDetection;
   ['gmOn', 'gmDetectRow', 'gmExtraRow', 'gmIgnoreRow'].forEach((id) => { $(id).hidden = !detect; });
   const gmOn = !detect || c.GameDetect;
+  if (P.linux) {
+    $('gmChipFs').title = 'Full-screen games: Steam, Proton/Wine, Lutris or Heroic games in a full-screen window (X11/XWayland)';
+    $('gmChipKnown').textContent = 'Steam and Wine games';
+    $('gmChipKnown').title = 'Any game started by Steam (also Proton) or running under Wine, full-screen or not';
+    $('gmChipAny').title = 'Any app covering its whole monitor in the foreground (X11/XWayland); also triggers on full-screen video';
+  }
   $('gmOptions').style.opacity = gmOn ? 1 : 0.45;
   $('gmOptions').style.pointerEvents = gmOn ? '' : 'none';
   $('gmFpsRow').hidden = c.GameAction !== 'LowerFps';
@@ -588,7 +597,6 @@ function applyStatus(st) {
   ST = st;
   $('titleStatus').textContent = st.title;
   $('gameBtn').classList.toggle('on', st.forceGame);
-  $('gmForce').classList.toggle('on', st.forceGame);
   const col = st.connected ? '#2BE36B' : '#FF1F4B';
   $('connDot').style.background = col;
   $('connDot').style.boxShadow = '0 0 10px ' + col;
@@ -651,6 +659,7 @@ function applyIdle(I) {
   $('idleProgress').firstChild.style.width = p + '%';
   const len = 2 * Math.PI * 168;
   $('idleRing').firstElementChild.style.strokeDasharray = (I.busy && p > 0 ? (p >= 100 ? len + 1 : len * p / 100) : 0) + ' 1100';
+  $('idleRing').classList.toggle('on', I.busy && p > 0);
   $('idleStatus').textContent = I.status;
   $('idleHit').classList.toggle('editing', I.editing);
   if (ST) applyStatus(ST);
@@ -733,7 +742,6 @@ function init() {
     send({ t: 'style', k: el.dataset.style, v });
   }));
   $('startupSwitch').addEventListener('click', (e) => { e.preventDefault(); const v = !$('startupSwitch').classList.contains('on'); $('startupSwitch').classList.toggle('on', v); send({ t: 'autostart', v }); });
-  $('gmForce').addEventListener('click', (e) => { e.preventDefault(); send({ t: 'game', v: !$('gmForce').classList.contains('on') }); });
   $('gameBtn').addEventListener('click', () => send({ t: 'game', v: !$('gameBtn').classList.contains('on') }));
   $('pvIdle').addEventListener('click', (e) => {
     e.preventDefault();
@@ -787,11 +795,15 @@ function init() {
     last = { x: e.clientX, y: e.clientY };
     hit.setPointerCapture(e.pointerId);
   });
+  // pan: moves add up and go to the app at most every 40 ms
+  let pan = { dx: 0, dy: 0 };
+  const sendPan = throttle(() => { if (pan.dx || pan.dy) { send({ t: 'idle', a: 'pan', dx: pan.dx, dy: pan.dy }); pan = { dx: 0, dy: 0 }; } }, 40);
   hit.addEventListener('pointermove', (e) => {
     if (!last) return;
     const k = 480 / Math.max(1, hit.clientWidth);
-    send({ t: 'idle', a: 'pan', dx: (e.clientX - last.x) * k, dy: (e.clientY - last.y) * k });
+    pan.dx += (e.clientX - last.x) * k; pan.dy += (e.clientY - last.y) * k;
     last = { x: e.clientX, y: e.clientY };
+    sendPan();
   });
   const endPan = () => { last = null; };
   hit.addEventListener('pointerup', endPan);

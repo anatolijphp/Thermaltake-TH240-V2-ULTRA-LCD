@@ -262,19 +262,21 @@ input.num { width: 64px; margin-right: 14px; }
 #rotateBtn:hover { border-color: var(--accent); box-shadow: var(--glowsoft); color: var(--accent); }
 #rotateBtn:active { background: var(--accentdim); }
 #lcd { position: relative; width: 344px; height: 344px; margin: 14px auto 0; }
-#lcd .ring { position: absolute; inset: 2px; border-radius: 50%; animation: spin 8s linear infinite;
-  background: linear-gradient(135deg, #FF1F4B 0%, #FFE600 25%, #00E1FF 50%, #7A4BFF 75%, #FF2BD6 100%);
-  -webkit-mask: radial-gradient(circle closest-side, transparent calc(100% - 4.5px), #000 calc(100% - 4px));
-  mask: radial-gradient(circle closest-side, transparent calc(100% - 4.5px), #000 calc(100% - 4px)); }
-#lcd .glow { position: absolute; inset: 2px; border-radius: 50%; box-shadow: 0 0 26px 2px rgba(255, 31, 75, .55), inset 0 0 18px rgba(255, 31, 75, .35); }
+/* the RGB ring is a full rotating disc behind the screen: the screen covers all but its 4 px rim, so ring and
+   picture meet without a gap */
+#lcd .ring { position: absolute; inset: 2px; border-radius: 50%; animation: spin 8s linear infinite; z-index: 0;
+  background: linear-gradient(135deg, #FF1F4B 0%, #FFE600 25%, #00E1FF 50%, #7A4BFF 75%, #FF2BD6 100%); }
+#lcd > * { z-index: 1; }
+#lcd .glow { position: absolute; inset: 2px; border-radius: 50%; z-index: 0; box-shadow: 0 0 26px 2px rgba(255, 31, 75, .55), inset 0 0 18px rgba(255, 31, 75, .35); }
 @keyframes spin { to { transform: rotate(360deg); } }
-#lcd .screen { position: absolute; inset: 8px; border-radius: 50%; background: #000; }
-#lcd .disc { position: absolute; left: 8px; top: 8px; width: 328px; height: 328px; border-radius: 50%; }
+#lcd .screen { position: absolute; inset: 6px; border-radius: 50%; background: #000; }
+#lcd .disc { position: absolute; left: 6px; top: 6px; width: 332px; height: 332px; border-radius: 50%; }
 #lcd img.disc { object-fit: contain; }
 #pvImg:not([src]), #idleImg:not([src]) { visibility: hidden; }
 #idleRing { position: absolute; left: 0; top: 0; pointer-events: none; transform: rotate(-90deg); overflow: visible; }
-#idleRing circle { fill: none; stroke: var(--accent2); stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0 0 7px rgba(0, 225, 255, .9)); stroke-dasharray: 0 1100; }
-#idleTemp { position: absolute; left: 8px; top: 8px; width: 328px; height: 164px; display: flex; justify-content: center; align-items: center; transform: translateY(16px); pointer-events: none; color: #fff; font-size: 64px; line-height: 1; text-shadow: 0 0 6px rgba(0, 0, 0, .6); }
+#idleRing circle { fill: none; stroke: var(--accent2); stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0 0 7px rgba(0, 225, 255, .9)); stroke-dasharray: 0 1100; opacity: 0; }
+#idleRing.on circle { opacity: 1; } /* a round cap draws a dot even at 0 length: hidden unless a transfer runs */
+#idleTemp { position: absolute; left: 6px; top: 6px; width: 332px; height: 166px; display: flex; justify-content: center; align-items: center; transform: translateY(16px); pointer-events: none; color: #fff; font-size: 64px; line-height: 1; text-shadow: 0 0 6px rgba(0, 0, 0, .6); }
 #idleTemp .deg { font-size: 32px; align-self: flex-start; margin: 0 1px; position: relative; top: calc(50% - 26px); }
 #idleTemp > span { display: block; }
 #idleEmpty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--dim); }
