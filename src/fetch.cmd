@@ -18,7 +18,9 @@ set NODE=https://nodejs.org/dist/v24.21.0
 
 rem Each merged archive leaves tools\rust\.done-<archive>; .done-1.98.0 marks the base set. A component pinned later
 rem (the i686 std) is merged into an existing tools\rust without fetching the rest again.
-if exist "%T%\rust\.done-1.98.0" goto extra
+rem tools\ may hold the Linux toolchain (same folder used from Linux, src/fetch.sh): the markers are the same there, so
+rem each part also needs its Windows executable, or it is replaced (the archives of both hosts stay in tools\dl\rs).
+if exist "%T%\rust\.done-1.98.0" if exist "%T%\rust\bin\rustc.exe" goto extra
 if exist "%T%\rust" rmdir /s /q "%T%\rust"
 mkdir "%T%\rust"
 call :component rustc-1.98.0-x86_64-pc-windows-gnullvm 83512f35f96d874acee08d7f3a7f36063cbc4c17e19b6cf1b10391e88fad4492 || exit /b 1
@@ -28,7 +30,7 @@ type nul > "%T%\rust\.done-1.98.0"
 :extra
 call :component rust-std-1.98.0-i686-pc-windows-gnullvm a441efaffd6cd859e7b2b9675a9c59276cb00c48bf3d4366d5b05bdf71342f67 || exit /b 1
 
-if exist "%T%\llvm-mingw\.done-20260922" goto done
+if exist "%T%\llvm-mingw\.done-20260922" if exist "%T%\llvm-mingw\bin\clang.exe" goto done
 if exist "%T%\llvm-mingw" rmdir /s /q "%T%\llvm-mingw"
 call :fetch %MINGW%/llvm-mingw-20260922-ucrt-x86_64.zip llvm-mingw-20260922-ucrt-x86_64.zip e3ad77d117a4bea19a7a3b333341824d79a5a371004a10e25b8504e7b3047666 || exit /b 1
 mkdir "%T%\llvm-mingw"
@@ -37,7 +39,7 @@ tar -xf "%DL%\llvm-mingw-20260922-ucrt-x86_64.zip" -C "%T%\llvm-mingw" --strip-c
 type nul > "%T%\llvm-mingw\.done-20260922"
 
 :done
-if exist "%T%\node\.done-24.21.0" goto node_ok
+if exist "%T%\node\.done-24.21.0" if exist "%T%\node\node.exe" goto node_ok
 if exist "%T%\node" rmdir /s /q "%T%\node"
 call :fetch %NODE%/node-v24.21.0-win-x64.zip node-v24.21.0-win-x64.zip 158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541 || exit /b 1
 mkdir "%T%\node"

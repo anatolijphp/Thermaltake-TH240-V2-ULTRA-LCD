@@ -45,6 +45,8 @@ fetch() { # url sha -> path of the verified archive
 # Merging those trees into one prefix is all its install.sh does (apart from manifests we don't need).
 # Each merged archive leaves tools/rust/.done-<archive>, so a newly pinned component (the i686 std) is added to an
 # existing tools/rust without fetching the rest again.
+# tools/ may hold the Windows toolchain (same folder used from Windows, src\fetch.cmd): the markers are the same there,
+# so each part also needs its Linux executable, or it is replaced (the archives of both hosts stay in tools/dl/rs).
 merge_rust() { # pattern
     echo "$PINS" | grep -E "$1" | while read -r url sha; do
         n=$(basename "$url" .tar.xz)
@@ -56,14 +58,14 @@ merge_rust() { # pattern
         touch "$T/rust/.done-$n"
     done
 }
-if [ ! -f "$T/rust/.done-1.98.0" ]; then
+if [ ! -f "$T/rust/.done-1.98.0" ] || [ ! -e "$T/rust/bin/rustc" ]; then
     rm -rf "$T/rust" && mkdir -p "$T/rust"
     merge_rust 'rustc-|cargo-|rust-std-1.98.0-x86_64'
     touch "$T/rust/.done-1.98.0"
 fi
 merge_rust 'rust-std-1.98.0-i686-pc-windows-gnullvm'
 
-if [ ! -f "$T/llvm-mingw/.done-20260922" ]; then
+if [ ! -f "$T/llvm-mingw/.done-20260922" ] || [ ! -e "$T/llvm-mingw/bin/clang" ]; then
     rm -rf "$T/llvm-mingw"
     set -- $(echo "$PINS" | grep llvm-mingw)
     a=$(fetch "$1" "$2")
@@ -72,7 +74,7 @@ if [ ! -f "$T/llvm-mingw/.done-20260922" ]; then
 fi
 
 # Node.js: esbuild + Sass build the Studio UI (src/studio/ui) during the studio crate's build.rs
-if [ ! -f "$T/node/.done-24.21.0" ]; then
+if [ ! -f "$T/node/.done-24.21.0" ] || [ ! -e "$T/node/bin/node" ]; then
     rm -rf "$T/node"
     set -- $(echo "$PINS" | grep node-v)
     a=$(fetch "$1" "$2")

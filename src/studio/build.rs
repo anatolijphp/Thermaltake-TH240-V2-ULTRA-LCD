@@ -35,7 +35,10 @@ fn build_ui() {
     // node finds its own npm and the tools on PATH
     let path = format!("{}{}{}", node.parent().unwrap().display(), if cfg!(windows) { ";" } else { ":" }, std::env::var("PATH").unwrap_or_default());
     let cache = manifest.join("../../tools/npm-cache");
-    if !ui.join("node_modules/esbuild").exists() || !ui.join("node_modules/sass").exists() {
+    // esbuild's native binary is per OS: node_modules installed on the other host (the same folder used from Linux and
+    // Windows) is reinstalled
+    let esbuild_bin = if cfg!(windows) { "node_modules/@esbuild/win32-x64" } else { "node_modules/@esbuild/linux-x64" };
+    if !ui.join("node_modules/esbuild").exists() || !ui.join("node_modules/sass").exists() || !ui.join(esbuild_bin).exists() {
         let ok = Command::new(&node)
             .arg(&npm_cli)
             .args(["ci", "--no-audit", "--no-fund", "--loglevel=error"])
