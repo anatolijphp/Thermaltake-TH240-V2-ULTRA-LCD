@@ -1,6 +1,6 @@
 # Advanced usage & CLI
 
-[Introduction](../README.md) · [Features & usage](usage.md) · **Advanced usage & CLI** · [Development](development.md)
+[Introduction](../README.md) · [Installation](installation.md) · [Features & usage](usage.md) · **Advanced usage & CLI** · [Development](development.md)
 
 ---
 
@@ -119,4 +119,4 @@ The USB protocol and the firmware's settings record are documented in [protocol 
 
 ---
 
-[Introduction](../README.md) · [Features & usage](usage.md) · **Advanced usage & CLI** · [Development](development.md)
+[Introduction](../README.md) · [Installation](installation.md) · [Features & usage](usage.md) · **Advanced usage & CLI** · [Development](development.md)

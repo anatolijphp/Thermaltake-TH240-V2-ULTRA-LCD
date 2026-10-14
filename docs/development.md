@@ -1,6 +1,6 @@
 # Development
 
-[Introduction](../README.md) · [Features & usage](usage.md) · [Advanced usage & CLI](advanced.md) · **Development**
+[Introduction](../README.md) · [Installation](installation.md) · [Features & usage](usage.md) · [Advanced usage & CLI](advanced.md) · **Development**
 
 ---
 
@@ -192,4 +192,4 @@ Add a test for whatever you change (see [Tests](#tests)).
 
 ---
 
-[Introduction](../README.md) · [Features & usage](usage.md) · [Advanced usage & CLI](advanced.md) · **Development**
+[Introduction](../README.md) · [Installation](installation.md) · [Features & usage](usage.md) · [Advanced usage & CLI](advanced.md) · **Development**

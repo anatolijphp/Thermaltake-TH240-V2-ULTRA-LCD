@@ -12,7 +12,7 @@ engineering the cooler's USB protocol.
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Ubuntu-0078d4)
 ![Rust](https://img.shields.io/badge/Rust-1.98%20(bundled%20toolchain)-b7410e)
 
-**Introduction** · [Features & usage](docs/usage.md) · [Advanced usage & CLI](docs/advanced.md) · [Development](docs/development.md)
+**Introduction** · [Installation](docs/installation.md) · [Features & usage](docs/usage.md) · [Advanced usage & CLI](docs/advanced.md) · [Development](docs/development.md)
 
 <img src="docs/media/dashboard.gif" alt="A tour of TT LCD Studio: dashboard, display modes, device and settings, with the live cooler preview" width="860">
 
@@ -31,22 +31,18 @@ engineering the cooler's USB protocol.
 | 🔄 **One rotation setting** | Turns the live picture and the cooler's own idle and boot screens together |
 | 🪶 **Light** | A few MB of native code, no runtimes to install: on Windows it uses only what ships with Windows (WebView2 included) |
 
-## Quick start
+## Installation
 
-- **Windows:** download **`TTLcdStudio-Setup.exe`** from the
-  [latest release](https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD/releases) and run it (no
-  administrator rights needed), or use the portable zip.
-- **Ubuntu:** `sudo apt install ./ttlcd-studio_<version>_amd64.deb`, then start "TT LCD Studio" from the app menu.
+Windows installer, portable zip and Ubuntu packages: see [Installation](docs/installation.md).
 
 > **Close TT RGB Plus first.** Only one program can drive the LCD at a time.
-
-The full install steps, the optional parts and what each mode does are in [Features & usage](docs/usage.md).
 
 ## Documentation
 
 | Page | What's in it |
 |---|---|
-| [Features & usage](docs/usage.md) | The screens and modes, styling readings, game mode, the idle picture, installing on Windows and Ubuntu |
+| [Installation](docs/installation.md) | Installing on Windows and Ubuntu, the optional parts, what runs on Linux |
+| [Features & usage](docs/usage.md) | The screens and modes, styling readings, game mode, the idle picture |
 | [Advanced usage & CLI](docs/advanced.md) | The `ttlcd` command, settings from the command line, the Linux background service, silent install, firmware recovery |
 | [Development](docs/development.md) | Building from source, how it works, the project layout, tests, CI, adding a mode or a UI part |
 | [Protocol notes](docs/protocol.md) | The cooler's USB protocol and the firmware's config record |
@@ -63,4 +59,4 @@ Not affiliated with Thermaltake, ASUS, TCOMAS or Nuvoton. Use at your own risk.
 
 ---
 
-**Introduction** · [Features & usage](docs/usage.md) · [Advanced usage & CLI](docs/advanced.md) · [Development](docs/development.md)
+**Introduction** · [Installation](docs/installation.md) · [Features & usage](docs/usage.md) · [Advanced usage & CLI](docs/advanced.md) · [Development](docs/development.md)
