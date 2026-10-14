@@ -4,7 +4,7 @@ members = ["core", "cli", "studio", "aura-hal", "installer"]
 resolver = "2"
 
 [workspace.package]
-version = "2.1.0"
+version = "2.2.0"
 edition = "2021"
 license = "MIT"
 
