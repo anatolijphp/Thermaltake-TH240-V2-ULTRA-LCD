@@ -18,6 +18,14 @@ concurrency:
 # not the runner's preinstalled Rust, so CI proves a clean machine needs nothing installed. The download cache only
 # saves time: every archive is checked against its pinned hash again after restore.
 jobs:
+  # Checks that don't depend on the OS run once here instead of in both build jobs.
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check firmware checksums
+        run: cd firmware && sha256sum -c SHA256SUMS.txt
+
   windows:
     runs-on: windows-latest
     steps:
@@ -32,20 +40,20 @@ jobs:
           key: rs-windows-${{ hashFiles('src/fetch.cmd', 'src/Cargo.lock', 'src/studio/ui/package-lock.json') }}
           restore-keys: rs-windows-
 
+      # Compiled crates from the last main run: cargo rebuilds only what changed (sources get fresh mtimes on
+      # checkout, so the workspace crates always rebuild; the dependencies don't). Only main saves it, so PRs and
+      # tags reuse main's without filling the cache.
+      - uses: actions/cache/restore@v4
+        with:
+          path: build/target
+          key: target-windows-${{ hashFiles('src/fetch.cmd', 'src/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: target-windows-${{ hashFiles('src/fetch.cmd', 'src/Cargo.lock') }}-
+
       # build\windows\app (the installed layout) and build\windows\TTLcdStudio-Setup.exe; also compiles extras\rescue (C#) and checks
       # that PatchPanel rebuilds firmware\lx800_tt021panel.bin byte for byte
       - name: Build
         shell: cmd
         run: build.cmd
-
-      - name: Check firmware checksums
-        shell: pwsh
-        run: |
-          Get-Content firmware/SHA256SUMS.txt | ForEach-Object {
-            $hash, $name = $_ -split '\s+', 2
-            $actual = (Get-FileHash "firmware/$name" -Algorithm SHA256).Hash.ToLower()
-            if ($actual -ne $hash) { throw "checksum mismatch: $name" }
-          }
 
       - name: Layout and CLI smoke test
         shell: pwsh
@@ -79,6 +87,12 @@ jobs:
           cd ..
           build\target\i686-pc-windows-gnullvm\release\examples\probe.exe build\windows\app\TTLcdAura.dll || exit /b 1
           build\target\x86_64-pc-windows-gnullvm\release\examples\probe.exe build\windows\app\TTLcdAura64.dll || exit /b 1
+
+      - uses: actions/cache/save@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: build/target
+          key: target-windows-${{ hashFiles('src/fetch.cmd', 'src/Cargo.lock') }}-${{ github.sha }}
 
       - name: Installer smoke test (silent install + uninstall)
         shell: pwsh
@@ -139,6 +153,15 @@ jobs:
           key: rs-linux-${{ hashFiles('src/fetch.sh', 'src/Cargo.lock', 'src/studio/ui/package-lock.json') }}
           restore-keys: rs-linux-
 
+      # Compiled crates from the last main run: cargo rebuilds only what changed (sources get fresh mtimes on
+      # checkout, so the workspace crates always rebuild; the dependencies don't). Only main saves it, so PRs and
+      # tags reuse main's without filling the cache.
+      - uses: actions/cache/restore@v4
+        with:
+          path: build/target
+          key: target-linux-${{ hashFiles('src/fetch.sh', 'src/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: target-linux-${{ hashFiles('src/fetch.sh', 'src/Cargo.lock') }}-
+
       # Runtime libraries only (what an Ubuntu desktop already has): src/fetch.sh links against them through
       # pkg-config stubs, so no -dev packages. cc is on the runner (a machine without it gets Zig from fetch.sh).
       # ./build.sh linux builds the .debs and the tarball (the Windows job builds the Windows app natively).
@@ -148,22 +171,78 @@ jobs:
           sudo apt-get install -y -qq --no-install-recommends libwebkit2gtk-4.1-0 libgtk-3-0t64 >/dev/null
           ./build.sh linux
 
-      - name: Unit tests
-        run: |
-          export PATH="$PWD/tools/rust/bin:$PATH" CARGO_HOME="$PWD/tools/cargo-home"
-          cargo test --manifest-path src/Cargo.toml --release --locked -p ttlcd-core -p ttlcd-aura-hal -p ttlcd-setup
-
-      - name: Check firmware checksums
-        run: cd firmware && sha256sum -c SHA256SUMS.txt
+      - uses: actions/cache/save@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: build/target
+          key: target-linux-${{ hashFiles('src/fetch.sh', 'src/Cargo.lock') }}-${{ github.sha }}
 
       - name: Inspect packages
         run: |
           for d in build/linux/*.deb; do echo "== $d"; dpkg-deb -I "$d"; dpkg-deb -c "$d"; done
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ttlcd-linux
+          path: |
+            build/linux/*.deb
+            build/linux/*.tar.gz
+
+  # Unit tests don't need the packages, so they run next to the builds instead of after the Linux one.
+  unit-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            tools/dl/rs
+            tools/cargo-home/registry
+            tools/npm-cache
+          key: rs-linux-${{ hashFiles('src/fetch.sh', 'src/Cargo.lock', 'src/studio/ui/package-lock.json') }}
+          restore-keys: rs-linux-
+
+      # Compiled crates from the last main run: cargo rebuilds only what changed (sources get fresh mtimes on
+      # checkout, so the workspace crates always rebuild; the dependencies don't). Only main saves it, so PRs and
+      # tags reuse main's without filling the cache.
+      - uses: actions/cache/restore@v4
+        with:
+          path: build/target
+          key: target-linux-test-${{ hashFiles('src/fetch.sh', 'src/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: target-linux-test-${{ hashFiles('src/fetch.sh', 'src/Cargo.lock') }}-
+
+      - name: Unit tests
+        run: |
+          sh src/fetch.sh
+          export PATH="$PWD/tools/rust/bin:$PATH" CARGO_HOME="$PWD/tools/cargo-home"
+          cargo test --manifest-path src/Cargo.toml --release --locked -p ttlcd-core -p ttlcd-aura-hal -p ttlcd-setup
+
+      - uses: actions/cache/save@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: build/target
+          key: target-linux-test-${{ hashFiles('src/fetch.sh', 'src/Cargo.lock') }}-${{ github.sha }}
+
+  # The .debs from the linux job; each case runs in its own clean container, both at the same time.
+  linux-package-test:
+    needs: linux
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [clean, studio-alone]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ttlcd-linux
+          path: build/linux
+
       # A clean Ubuntu with nothing but the .deb and its dependencies: proves the package installs and the
       # renderer works there (the cooler itself isn't attached to CI). Then ttlcd-studio over it, and every
       # Studio page rendered under Xvfb.
       - name: Package test (clean Ubuntu 24.04)
+        if: matrix.case == 'clean'
         run: |
           docker run --rm -v "$PWD/build/linux:/pkg" ubuntu:24.04 sh -ec '
             apt-get update -qq
@@ -195,6 +274,7 @@ jobs:
 
       # The App Center case: only the ttlcd-studio .deb, on a clean system, must install and bring the CLI along.
       - name: Package test (ttlcd-studio alone)
+        if: matrix.case == 'studio-alone'
         run: |
           docker run --rm -v "$PWD/build/linux:/pkg" ubuntu:24.04 sh -ec '
             apt-get update -qq
@@ -205,21 +285,14 @@ jobs:
           '
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && matrix.case == 'clean'
         with:
           name: screenshots-linux
           path: build/linux/shots/
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ttlcd-linux
-          path: |
-            build/linux/*.deb
-            build/linux/*.tar.gz
-
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, linux]
+    needs: [checks, windows, linux, unit-tests, linux-package-test]
     runs-on: ubuntu-latest
     permissions:
       contents: write
