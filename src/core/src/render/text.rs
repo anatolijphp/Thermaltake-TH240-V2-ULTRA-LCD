@@ -7,6 +7,26 @@ use tiny_skia::{Path, PathBuilder};
 struct Face {
     data: Arc<Vec<u8>>,
     index: u32,
+    weight: u16, // asked for (CSS scale: 400 regular, 700 bold); sets a variable font's weight axis
+}
+
+impl Face {
+    /// The face to shape and draw with. A variable font (Ubuntu[wdth,wght].ttf, Segoe UI Variable, ...) is set to
+    /// Regular or Bold at normal width, as a browser or GDI draws it; left alone it is its default instance, which
+    /// can be a thin or condensed one.
+    fn rb(&self) -> Option<rustybuzz::Face<'_>> {
+        let mut f = rustybuzz::Face::from_slice(&self.data, self.index)?;
+        let axes: Vec<_> = f.variation_axes().into_iter().collect();
+        for a in axes {
+            let want = match &a.tag.to_bytes() {
+                b"wght" => self.weight as f32,
+                b"wdth" => 100.0,
+                _ => continue,
+            };
+            f.set_variation(a.tag, want.clamp(a.min_value, a.max_value));
+        }
+        Some(f)
+    }
 }
 
 pub struct Fonts {
@@ -53,6 +73,7 @@ impl Fonts {
         if let Some(f) = self.faces.lock().unwrap().get(&key) {
             return f.clone();
         }
+        let weight = if bold { 700 } else { 400 };
         let mut names: Vec<&str> = Vec::new();
         if !family.is_empty() && self.has_family(family) {
             names.push(family);
@@ -62,7 +83,7 @@ impl Fonts {
         #[cfg(target_os = "linux")]
         if names.is_empty() {
             found = fc_match(&format!("{}:weight={}:slant={}", if family.is_empty() { "sans-serif" } else { family }, if bold { "bold" } else { "regular" }, if italic { "italic" } else { "roman" }))
-                .and_then(|(p, i)| self.load_file(&p, i));
+                .and_then(|(p, i)| self.load_file(&p, i, weight));
         }
         names.extend(FALLBACK.iter().filter(|n| self.has_family(n)));
         for n in names {
@@ -71,26 +92,26 @@ impl Fonts {
             }
             let q = fontdb::Query {
                 families: &[fontdb::Family::Name(n)],
-                weight: if bold { fontdb::Weight::BOLD } else { fontdb::Weight::NORMAL },
+                weight: fontdb::Weight(weight),
                 stretch: fontdb::Stretch::Normal,
                 style: if italic { fontdb::Style::Italic } else { fontdb::Style::Normal },
             };
             if let Some(id) = self.db.query(&q) {
-                found = self.load(id);
+                found = self.load(id, weight);
                 if found.is_some() {
                     break;
                 }
             }
         }
         if found.is_none() {
-            found = self.db.faces().next().and_then(|f| self.load(f.id)); // anything at all
+            found = self.db.faces().next().and_then(|f| self.load(f.id, weight)); // anything at all
         }
         self.faces.lock().unwrap().insert(key, found.clone());
         found
     }
 
     #[cfg(target_os = "linux")]
-    fn load_file(&self, p: &std::path::Path, index: u32) -> Option<Arc<Face>> {
+    fn load_file(&self, p: &std::path::Path, index: u32, weight: u16) -> Option<Arc<Face>> {
         let data = {
             let mut files = self.files.lock().unwrap();
             match files.get(p) {
@@ -102,8 +123,9 @@ impl Fonts {
                 }
             }
         };
+        let index = index & 0xFFFF; // fontconfig adds a named instance in the high bits; the axes are set in rb()
         rustybuzz::Face::from_slice(&data, index)?;
-        Some(Arc::new(Face { data, index }))
+        Some(Arc::new(Face { data, index, weight }))
     }
 
     /// Faces tried for characters the chosen font lacks (fontconfig's sans-serif first on Linux).
@@ -115,7 +137,7 @@ impl Fonts {
         }
         if v.is_empty() {
             #[cfg(target_os = "linux")]
-            let first = fc_match(if bold { "sans-serif:weight=bold" } else { "sans-serif" }).and_then(|(p, i)| self.load_file(&p, i));
+            let first = fc_match(if bold { "sans-serif:weight=bold" } else { "sans-serif" }).and_then(|(p, i)| self.load_file(&p, i, if bold { 700 } else { 400 }));
             #[cfg(not(target_os = "linux"))]
             let first: Option<Arc<Face>> = None;
             let first = first.or_else(|| self.face("", bold, false));
@@ -132,7 +154,7 @@ impl Fonts {
         v
     }
 
-    fn load(&self, id: fontdb::ID) -> Option<Arc<Face>> {
+    fn load(&self, id: fontdb::ID, weight: u16) -> Option<Arc<Face>> {
         let info = self.db.face(id)?;
         let data = match &info.source {
             fontdb::Source::File(p) => {
@@ -151,7 +173,7 @@ impl Fonts {
             _ => return None,
         };
         rustybuzz::Face::from_slice(&data, info.index)?;
-        Some(Arc::new(Face { data, index: info.index }))
+        Some(Arc::new(Face { data, index: info.index, weight }))
     }
 
     /// The text as one path: `size` = em size in px, (x, top) = top-left of the line (baseline at top + ascent),
@@ -183,13 +205,13 @@ impl Fonts {
     fn shape_path(&self, family: &str, bold: bool, italic: bool, size: f32, text: &str) -> Option<Path> {
         let (x, top) = (0.0f32, 0.0f32);
         let primary = self.face(family, bold, italic)?;
-        let pface = rustybuzz::Face::from_slice(&primary.data, primary.index)?;
+        let pface = primary.rb()?;
         let ascent = pface.tables().os2.map(|o| o.windows_ascender() as f32).filter(|a| *a > 0.0).unwrap_or(pface.ascender() as f32);
         let baseline = top + ascent * size / pface.units_per_em() as f32;
         let mut pb = PathBuilder::new();
         let mut pen = x;
         for (face, run) in self.runs(&primary, bold, text) {
-            let Some(rf) = rustybuzz::Face::from_slice(&face.data, face.index) else { continue };
+            let Some(rf) = face.rb() else { continue };
             let k = size / rf.units_per_em() as f32;
             // italic asked for but the family has none: slanted like GDI+'s (and fontconfig's) simulated italic
             let skew = if italic && !rf.is_italic() && !rf.is_oblique() { SYNTHETIC_ITALIC } else { 0.0 };
@@ -209,7 +231,7 @@ impl Fonts {
     fn runs(&self, primary: &Arc<Face>, bold: bool, text: &str) -> Vec<(Arc<Face>, String)> {
         // a glyph counts only with an outline: colour-emoji fonts map digits etc. to bitmaps, which a path can't draw
         let has = |f: &Face, c: char| {
-            rustybuzz::Face::from_slice(&f.data, f.index).is_some_and(|ff| ff.glyph_index(c).is_some_and(|g| ff.outline_glyph(g, &mut NoOutline).is_some()))
+            f.rb().is_some_and(|ff| ff.glyph_index(c).is_some_and(|g| ff.outline_glyph(g, &mut NoOutline).is_some()))
         };
         let mut fb: Option<Vec<Arc<Face>>> = None;
         let mut out: Vec<(Arc<Face>, String)> = Vec::new();
@@ -231,7 +253,7 @@ impl Fonts {
     /// Advance width of the text in px (for word wrapping).
     pub fn width(&self, family: &str, bold: bool, size: f32, text: &str) -> f32 {
         let Some(f) = self.face(family, bold, false) else { return 0.0 };
-        let Some(face) = rustybuzz::Face::from_slice(&f.data, f.index) else { return 0.0 };
+        let Some(face) = f.rb() else { return 0.0 };
         let mut buf = rustybuzz::UnicodeBuffer::new();
         buf.push_str(text);
         let g = rustybuzz::shape(&face, &[], buf);
@@ -241,12 +263,41 @@ impl Fonts {
     /// Line height (ascent + descent) in px, as GDI+ lays out wrapped text.
     pub fn line_height(&self, family: &str, bold: bool, size: f32) -> f32 {
         let Some(f) = self.face(family, bold, false) else { return size * 1.2 };
-        let Some(face) = rustybuzz::Face::from_slice(&f.data, f.index) else { return size * 1.2 };
+        let Some(face) = f.rb() else { return size * 1.2 };
         let (a, d) = match face.tables().os2 {
             Some(o) if o.windows_ascender() > 0 => (o.windows_ascender() as f32, o.windows_descender().unsigned_abs() as f32),
             _ => (face.ascender() as f32, face.descender().unsigned_abs() as f32),
         };
         (a + d) * size / face.units_per_em() as f32
+    }
+}
+
+#[cfg(test)]
+mod variable_font_tests {
+    use super::*;
+
+    /// A variable font (e.g. Ubuntu[wdth,wght].ttf) is drawn at Regular / Bold at normal width, not whatever its
+    /// default instance is (2026-10-15). Runs where such a font is installed.
+    #[test]
+    fn variable_fonts_get_regular_and_bold() {
+        let f = fonts();
+        let var = f.db.faces().find(|info| {
+            f.load(info.id, 400).and_then(|face| face.rb().map(|r| r.variation_axes().into_iter().any(|a| &a.tag.to_bytes() == b"wght"))).unwrap_or(false)
+        });
+        let Some(info) = var else { return };
+        let regular = f.load(info.id, 400).unwrap();
+        let bold = f.load(info.id, 700).unwrap();
+        let w = |face: &Face| {
+            let r = face.rb().unwrap();
+            let coords = r.variation_coordinates().to_vec();
+            (coords, r.variation_axes().into_iter().find(|a| &a.tag.to_bytes() == b"wght").unwrap())
+        };
+        let (rc, axis) = w(&regular);
+        let (bc, _) = w(&bold);
+        assert_ne!(rc, bc, "{:?}: Regular and Bold must differ", info.families);
+        if axis.min_value <= 400.0 && axis.max_value >= 700.0 {
+            assert!(axis.def_value != 400.0 || rc.iter().all(|c| c.get() == 0), "Regular at the default instance");
+        }
     }
 }
 
