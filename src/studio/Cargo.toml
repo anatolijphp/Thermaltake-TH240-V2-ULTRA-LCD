@@ -16,7 +16,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tray-icon = "0.26"
 rfd = { version = "0.17", default-features = false, features = ["gtk3"] }
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "gif"] }
 
 # Windows platform code (src/os/windows.rs, src/os/webview2_loader.rs)
 [target.'cfg(windows)'.dependencies]

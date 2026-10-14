@@ -43,14 +43,43 @@ const STYLE: &str = include_str!(concat!(env!("OUT_DIR"), "/ui/app.css"));
 const SCRIPT: &str = include_str!(concat!(env!("OUT_DIR"), "/ui/app.js"));
 const ICON_PNG: &[u8] = include_bytes!("../../../linux/ttlcd-studio.png");
 
-/// `--screenshot <png> [page]` (render a page and exit) or `--check <script.js>` (run a UI check and exit 1 if it
-/// fails; src/studio/tests/ui).
+/// `--screenshot <png> [page]` (render a page and exit), `--check <script.js>` (run a UI check and exit 1 if it
+/// fails; src/studio/tests/ui) or `--record <out.gif> <seconds> <script.js>` (run a script and record the window).
 struct Shot {
     file: Option<PathBuf>,
     page: String,
     at: Option<Instant>,
     deadline: Instant,
     check: Option<String>,
+    record: Option<Record>,
+}
+
+/// `--record`: the window captured every 100 ms while the script runs, then a GIF at 75 % (like the README GIFs).
+struct Record {
+    out: PathBuf,
+    secs: f32,
+    dir: PathBuf,
+    frames: Vec<(PathBuf, Instant)>,
+    start: Option<Instant>,
+}
+
+impl Record {
+    /// The captured frames as a GIF, each shown for as long as it was on screen.
+    fn encode(&self) -> Result<(), String> {
+        use image::codecs::gif::{GifEncoder, Repeat};
+        let file = std::fs::File::create(&self.out).map_err(|e| e.to_string())?;
+        let mut enc = GifEncoder::new_with_speed(file, 10);
+        enc.set_repeat(Repeat::Infinite).map_err(|e| e.to_string())?;
+        for (i, (path, at)) in self.frames.iter().enumerate() {
+            let img = image::open(path).map_err(|e| e.to_string())?.to_rgba8();
+            let (w, h) = (img.width() * 3 / 4, img.height() * 3 / 4);
+            let small = image::imageops::resize(&img, w, h, image::imageops::FilterType::Triangle);
+            let next = self.frames.get(i + 1).map_or(*at + Duration::from_millis(1500), |(_, t)| *t);
+            let ms = next.duration_since(*at).as_millis().clamp(20, 5000) as u32;
+            enc.encode_frame(image::Frame::from_parts(small, 0, 0, image::Delay::from_numer_denom_ms(ms, 1))).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
 }
 
 /// What a `--check` script runs inside: the test helpers, then the script as the body of an async function.
@@ -121,7 +150,7 @@ fn main() -> wry::Result<()> {
     let start_in_tray = args.iter().any(|a| a == "--tray");
     let shot = args.iter().position(|a| a == "--screenshot").and_then(|i| {
         let file = args.get(i + 1)?;
-        Some(Shot { file: Some(PathBuf::from(file)), page: args.get(i + 2).cloned().unwrap_or_else(|| "dashboard".into()), at: None, deadline: Instant::now() + Duration::from_secs(20), check: None })
+        Some(Shot { file: Some(PathBuf::from(file)), page: args.get(i + 2).cloned().unwrap_or_else(|| "dashboard".into()), at: None, deadline: Instant::now() + Duration::from_secs(20), check: None, record: None })
     });
     let shot = shot.or_else(|| {
         let i = args.iter().position(|a| a == "--check")?;
@@ -133,7 +162,19 @@ fn main() -> wry::Result<()> {
                 std::process::exit(1);
             }
         };
-        Some(Shot { file: None, page: "dashboard".into(), at: None, deadline: Instant::now() + Duration::from_secs(40), check: Some(body) })
+        Some(Shot { file: None, page: "dashboard".into(), at: None, deadline: Instant::now() + Duration::from_secs(40), check: Some(body), record: None })
+    });
+    let shot = shot.or_else(|| {
+        let i = args.iter().position(|a| a == "--record")?;
+        let (out, secs, script) = (args.get(i + 1)?, args.get(i + 2)?.parse::<f32>().ok()?, args.get(i + 3)?);
+        let body = std::fs::read_to_string(script).unwrap_or_else(|e| {
+            eprintln!("{script}: {e}");
+            std::process::exit(1);
+        });
+        let dir = std::env::temp_dir().join(format!("ttlcd-record-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let record = Record { out: PathBuf::from(out), secs, dir, frames: vec![], start: None };
+        Some(Shot { file: None, page: "dashboard".into(), at: None, deadline: Instant::now() + Duration::from_secs_f32(secs + 30.0), check: Some(body), record: Some(record) })
     });
 
     #[cfg(target_os = "linux")]
@@ -359,7 +400,30 @@ fn main() -> wry::Result<()> {
                             s.at = Some(now + Duration::from_millis(2500));
                         }
                     }
-                    if s.check.is_some() && (st.check_done || now >= s.deadline) {
+                    if let Some(r) = &mut s.record {
+                        // recording: a frame every 100 ms from shortly after the script starts, for the set time
+                        if s.at.is_some() {
+                            let start = *r.start.get_or_insert(now + Duration::from_millis(400));
+                            let due = r.frames.last().is_none_or(|(_, t)| now.duration_since(*t) >= Duration::from_millis(100));
+                            if now >= start && due {
+                                let path = r.dir.join(format!("{:05}.png", r.frames.len()));
+                                if os::screenshot(&window, &path).is_ok() {
+                                    r.frames.push((path, now));
+                                }
+                            }
+                            if now >= start + Duration::from_secs_f32(r.secs) || now >= s.deadline {
+                                match r.encode() {
+                                    Ok(()) => println!("recorded {} frames to {}", r.frames.len(), r.out.display()),
+                                    Err(e) => {
+                                        eprintln!("recording failed: {e}");
+                                        st.check_failed += 1;
+                                    }
+                                }
+                                let _ = std::fs::remove_dir_all(&r.dir);
+                                quit = true;
+                            }
+                        }
+                    } else if s.check.is_some() && (st.check_done || now >= s.deadline) {
                         if !st.check_done {
                             eprintln!("FAIL the check didn't finish within {} s", 40);
                             st.check_failed += 1;

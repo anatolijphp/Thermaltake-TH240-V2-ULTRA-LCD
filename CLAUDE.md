@@ -155,7 +155,9 @@ stopping the `ttlcd hwmon` helper, so the helper wasn't the cause. `ttlcd temp` 
   page and exits; `TTLCD_SHOT_SELECT=ClkItems:2` pre-selects a reading, `TTLCD_SHOT_HEIGHT` renders taller,
   `TTLCD_SHOT_JS` runs a script first. `TTLCD_NO_DEVICE=1` never opens the cooler (use it for every test run: a normal
   Studio start takes the cooler and, on Linux, stops the `ttlcd` service). `TTLCD_DEVTOOLS=1` = web inspector.
-- `--record` (README GIFs) existed only in 1.x (git history).
+- `--record <out.gif> <seconds> <script.js>` records the window (every 100 ms, GIF at 75 % = 930x594 like the README
+  GIFs) while a script with the UI checks' `T` helpers drives the page; scripts in `src/studio/tests/record/`
+  (`pump.js` made `docs/media/pump.gif`). The older GIFs come from 1.x's `--record`.
 - Idle screen temperature: the LX800 firmware draws it with its own two 4-bit bitmap fonts (100 px and 60 px cells,
   Arial look) found in the image; `idle_text.rs` copies glyphs (`core/fonts/lx800-idle.bin`, checked against the
   firmware by a test) and layout (number cell at y 100, small "°" at y 103, centred; reading truncated; #CCCCCC).
