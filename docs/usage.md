@@ -36,7 +36,7 @@ The screen becomes a window into the pump: a dark metal impeller spinning in the
 top left, going round and out at the top right, carrying bubbles and specks (a few drift on their own). The LEDs
 around the pump head (left, bottom and right) light the water and catch the blade edges.
 
-<img src="media/pump.gif" alt="Pump mode: the impeller at rest in red LED light, spinning up until the blades blur, then the light following Aura Sync's colours" width="400">
+<img src="media/pump.gif" alt="Display modes: choosing Pump, the preview spinning at the CPU fan's speed, then the speed set by hand from slow to fast and the coolant colour changed" width="860">
 
 - **Speed from:** the impeller turns at the speed of a motherboard fan header: the **CPU fan** unless you pick
   another one (the header your pump is on), or **set by hand**. The options show the speed it uses now. Fan speeds
