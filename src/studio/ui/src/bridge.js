@@ -51,6 +51,7 @@ window.ttlcd = {
   alert: (text) => update({ alert: text }),
   dnd: (d) => update({ dnd: d }),
   page: (name) => showPage(name),
+  store: () => snap, // read by the UI checks (src/studio/tests/ui)
 };
 
 /** Change one setting / one style field of the selected reading. */

@@ -126,6 +126,22 @@ jobs:
             if (-not (Test-Path $png)) { throw "no screenshot for $p" }
           }
 
+      # the UI regression checks (src/studio/tests/ui): each runs in Studio, which exits 1 when a check fails
+      - name: UI checks
+        shell: pwsh
+        run: |
+          $env:TTLCD_NO_DEVICE = '1'
+          $failed = 0
+          foreach ($f in Get-ChildItem src/studio/tests/ui/*.js) {
+            Write-Host "== $($f.Name)"
+            $out = Join-Path $env:RUNNER_TEMP 'check.txt'
+            $proc = Start-Process build/windows/app/TTLcdStudio.exe -ArgumentList "--check `"$($f.FullName)`"" -PassThru -RedirectStandardOutput $out
+            if (-not $proc.WaitForExit(120000)) { $proc.Kill(); Write-Host "timed out"; $failed++ ; continue }
+            Get-Content $out
+            if ($proc.ExitCode -ne 0) { $failed++ }
+          }
+          if ($failed) { throw "$failed UI check(s) failed" }
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -233,6 +249,11 @@ jobs:
       matrix:
         case: [clean, studio-alone]
     steps:
+      # only for the UI check scripts (src/studio/tests)
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: src/studio/tests
+
       - uses: actions/download-artifact@v4
         with:
           name: ttlcd-linux
@@ -244,7 +265,7 @@ jobs:
       - name: Package test (clean Ubuntu 24.04)
         if: matrix.case == 'clean'
         run: |
-          docker run --rm -v "$PWD/build/linux:/pkg" ubuntu:24.04 sh -ec '
+          docker run --rm -v "$PWD/build/linux:/pkg" -v "$PWD/src/studio/tests:/tests" ubuntu:24.04 sh -ec '
             apt-get update -qq
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pkg/ttlcd_*_amd64.deb >/dev/null
             ttlcd version
@@ -270,6 +291,8 @@ jobs:
             TTLCD_SHOT_SELECT=ClkItems:0 timeout 120 xvfb-run -a -s "-screen 0 1400x1400x24" dbus-launch --exit-with-session \
               ttlcd-studio --screenshot /pkg/shots/linux-modes_Clock_style.png modes:Clock
             for p in dashboard modes_Clock modes_Image device settings idle; do test -s /pkg/shots/linux-$p.png; done
+            # the UI regression checks (src/studio/tests/ui), each a Studio run that fails on a failed check
+            sh /tests/run-ui-checks.sh ttlcd-studio
           '
 
       # The App Center case: only the ttlcd-studio .deb, on a clean system, must install and bring the CLI along.

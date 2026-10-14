@@ -11,6 +11,9 @@ Owner rules:
 - Only Studio and its dependencies were rewritten (Rust, 2.0). `tools/`, `firmware/` and the rescue tools stay as they
   are. Tools not related to Studio live in `extras/`.
 - Linux: Ubuntu build with the Studio window, CLI and screen service (see "Linux" below).
+- **Every fixed issue gets a regression test in the project** (see "Tests"). Reproduce the issue first with a test
+  that fails, fix it, and check the test fails without the fix and passes with it. Never leave a check as a
+  one-off script or screenshot outside the repo.
 
 Full conversation transcript (very long):
 `C:\Users\anato\.claude\projects\C--Users-anato\87ff2591-a9e9-489b-9bea-a8a27fdb3ba3.jsonl`
@@ -66,6 +69,21 @@ before 2.0, e.g. `ed769c0` = 1.3.3).
   CARGO_HOME=$PWD/../tools/cargo-home PKG_CONFIG_LIBDIR=$PWD/../tools/linux-pc/pkgconfig`, then
   `cargo build -p <crate> [--target x86_64-pc-windows-gnullvm]`, `cargo test -p ttlcd-core -p ttlcd-aura-hal -p ttlcd-setup`.
 
+## Tests
+
+Every bug fix and behaviour change comes with a test that would have caught it; it stays in the project and runs in
+CI (`.github/workflows/build.yml`). Name the date and the issue in the test's doc comment.
+- Logic, rendering, protocol, firmware facts: Rust `#[test]`s next to the code (`cargo test -p ttlcd-core
+  -p ttlcd-aura-hal -p ttlcd-setup`; CI's `unit-tests` job). Measurements worth re-running by hand are `#[ignore]`
+  tests that print (e.g. `aura_breathing`).
+- Studio behaviour (page + app together): UI checks in `src/studio/tests/ui/*.js`, each run as
+  `ttlcd-studio --check <script.js>` (`TTLcdStudio.exe` on Windows): the script runs in the real page with
+  `T.ok(name, cond, detail)`, `T.wait(ms)`, `T.send(msg)` (same messages as the page), `T.store()` (the page's
+  state) and `T.$(selector)`; Studio prints `ok`/`FAIL` lines and exits 1 on a failure. `testDrag` simulates the
+  OS file-drag events. Run all: `src/studio/tests/run-ui-checks.sh` (uses xvfb-run without a display). CI runs
+  them on Windows and in the clean Ubuntu container.
+- Tests never touch the cooler (`TTLCD_NO_DEVICE=1`; `--check`/`--screenshot` don't save config.xml).
+
 ## Layout
 
 | Path | What |
@@ -73,6 +91,7 @@ before 2.0, e.g. `ed769c0` = 1.3.3).
 | `src/core/` | Everything UI-free: `hid/` (hidraw; SetupAPI + overlapped I/O, a timed-out read stays pending), `lcd.rs` (protocol; one lock per interface; `Global\TTLcd.Device` mutex on Windows, flock on Linux), `config.rs` (same `config.xml` as C#), `engine.rs` (render/send/control/game threads, 500 ms keep-alive, LX800 red/blue swap at send time), `render/` (tiny-skia + fontdb/rustybuzz text paths, round-panel fitting, effects), `aura.rs` (TTAS reader + visualiser), `model.rs` (Studio texts/panels/rotation/dashboard/LineDrag), `idle.rs`, `store.rs`, `sensors.rs`, `video.rs`, `capture.rs`, `games.rs`, `platform.rs`, `win/` (Windows: shared memory, registry, elevation, GDI capture, Media Foundation `mf.rs`, games, virtual display `vdd.rs`, `aura_install.rs`, `sensors.rs` helper/service) |
 | `src/cli/` | `ttlcd` command line and screen service (`ttlcd run`) |
 | `src/studio/` | Studio: wry/tao window, tray (tray-icon), `os/linux.rs` + `os/windows.rs`, `studio.rs` (state for the page, messages from it, drag and drop of files). The page is `ui/`: React 19 components, each a folder with `Name.jsx` + `Name.scss` (Sass; shared `styles/_tokens.scss`), bundled by esbuild (`ui/build.mjs`) from build.rs into OUT_DIR and served over a custom protocol (WebView2 on Windows with a built-in loader, no WebView2Loader.dll; WebKitGTK on Linux). `ui/src/bridge.js` = JSON messages out (`window.ipc`), `window.ttlcd.*` calls in, a small store read with `useStore` |
+| `src/studio/tests/` | UI checks (`ui/*.js`, run by `run-ui-checks.sh`; see "Tests") |
 | `src/aura-hal/` | `TTLcdAura.dll`: Armoury Crate HAL COM plugin written by hand (vtables), i686 + x86_64; `examples/probe.rs` self-test |
 | `src/installer/` | `TTLcdStudio-Setup.exe` (Win32 UI, per-user install/uninstall) and `ttlcd-pack` |
 | `linux/` | Debian packaging: control files, udev rule, systemd user unit, desktop entry, icon |

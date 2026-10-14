@@ -43,11 +43,34 @@ const STYLE: &str = include_str!(concat!(env!("OUT_DIR"), "/ui/app.css"));
 const SCRIPT: &str = include_str!(concat!(env!("OUT_DIR"), "/ui/app.js"));
 const ICON_PNG: &[u8] = include_bytes!("../../../linux/ttlcd-studio.png");
 
+/// `--screenshot <png> [page]` (render a page and exit) or `--check <script.js>` (run a UI check and exit 1 if it
+/// fails; src/studio/tests/ui).
 struct Shot {
-    file: PathBuf,
+    file: Option<PathBuf>,
     page: String,
     at: Option<Instant>,
     deadline: Instant,
+    check: Option<String>,
+}
+
+/// What a `--check` script runs inside: the test helpers, then the script as the body of an async function.
+fn check_script(body: &str) -> String {
+    format!(
+        r#"(async function(){{
+  const post = (m) => window.ipc.postMessage(JSON.stringify(m));
+  const T = {{
+    ok: (name, cond, detail) => post({{ t: 'check', name: String(name), ok: !!cond, detail: detail === undefined ? '' : String(detail) }}),
+    wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+    send: post,
+    store: () => window.ttlcd.store(),
+    $: (sel) => document.querySelector(sel),
+  }};
+  try {{
+{body}
+  }} catch (e) {{ T.ok('script ran to the end', false, e && e.stack || e); }}
+  post({{ t: 'checkDone' }});
+}})();"#
+    )
 }
 
 fn icon_rgba() -> Option<(Vec<u8>, u32, u32)> {
@@ -98,7 +121,19 @@ fn main() -> wry::Result<()> {
     let start_in_tray = args.iter().any(|a| a == "--tray");
     let shot = args.iter().position(|a| a == "--screenshot").and_then(|i| {
         let file = args.get(i + 1)?;
-        Some(Shot { file: PathBuf::from(file), page: args.get(i + 2).cloned().unwrap_or_else(|| "dashboard".into()), at: None, deadline: Instant::now() + Duration::from_secs(20) })
+        Some(Shot { file: Some(PathBuf::from(file)), page: args.get(i + 2).cloned().unwrap_or_else(|| "dashboard".into()), at: None, deadline: Instant::now() + Duration::from_secs(20), check: None })
+    });
+    let shot = shot.or_else(|| {
+        let i = args.iter().position(|a| a == "--check")?;
+        let file = args.get(i + 1)?;
+        let body = match std::fs::read_to_string(file) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("FAIL {file}: {e}");
+                std::process::exit(1);
+            }
+        };
+        Some(Shot { file: None, page: "dashboard".into(), at: None, deadline: Instant::now() + Duration::from_secs(40), check: Some(body) })
     });
 
     #[cfg(target_os = "linux")]
@@ -226,6 +261,7 @@ fn main() -> wry::Result<()> {
 
     let mut st = Studio::new(engine.clone(), blobs.clone(), proxy.clone());
     st.no_save = shot.is_some();
+    st.testing = shot.as_ref().is_some_and(|s| s.check.is_some());
     if let Some(n) = note {
         st.set_note(n);
     }
@@ -312,15 +348,28 @@ fn main() -> wry::Result<()> {
                         }
                         st.out.push(format!("ttlcd.page({})", Value::from(s.page.clone())));
                         st.push_all();
-                        // dev aid: TTLCD_SHOT_JS runs in the page before the capture (exercise clicks and drags)
-                        if let Ok(js) = std::env::var("TTLCD_SHOT_JS") {
-                            st.out.push(format!("setTimeout(function(){{{js}}}, 600)"));
+                        if let Some(body) = &s.check {
+                            st.out.push(format!("setTimeout(function(){{{}}}, 600)", check_script(body)));
+                            s.at = Some(s.deadline);
+                        } else {
+                            // dev aid: TTLCD_SHOT_JS runs in the page before the capture (exercise clicks and drags)
+                            if let Ok(js) = std::env::var("TTLCD_SHOT_JS") {
+                                st.out.push(format!("setTimeout(function(){{{js}}}, 600)"));
+                            }
+                            s.at = Some(now + Duration::from_millis(2500));
                         }
-                        s.at = Some(now + Duration::from_millis(2500));
                     }
-                    if s.at.is_some_and(|t| now >= t) || now >= s.deadline {
-                        if let Err(e) = os::screenshot(&window, &s.file) {
-                            eprintln!("screenshot failed: {e}");
+                    if s.check.is_some() && (st.check_done || now >= s.deadline) {
+                        if !st.check_done {
+                            eprintln!("FAIL the check didn't finish within {} s", 40);
+                            st.check_failed += 1;
+                        }
+                        quit = true;
+                    } else if s.check.is_none() && (s.at.is_some_and(|t| now >= t) || now >= s.deadline) {
+                        if let Some(f) = &s.file {
+                            if let Err(e) = os::screenshot(&window, f) {
+                                eprintln!("screenshot failed: {e}");
+                            }
                         }
                         quit = true;
                     }
@@ -430,6 +479,10 @@ fn main() -> wry::Result<()> {
                         std::thread::sleep(Duration::from_millis(10));
                     }
                 }
+            }
+            if st.testing {
+                // --check: the exit code is the result
+                std::process::exit(if st.check_failed > 0 { 1 } else { 0 });
             }
             *flow = ControlFlow::Exit;
         }

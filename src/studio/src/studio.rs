@@ -55,6 +55,11 @@ pub struct Studio {
     /// script for the page, flushed by the event loop
     pub out: Vec<String>,
     pub no_save: bool,
+    /// `--check`: a UI check script runs in the page; it reports with "check" / "checkDone" and may simulate file
+    /// drags ("testDrag"), which only the OS can start otherwise
+    pub testing: bool,
+    pub check_failed: u32,
+    pub check_done: bool,
     save_at: Option<Instant>,
     /// state / status changed by settings messages: sent once per event-loop tick (40 ms), not once per message,
     /// so dragging a slider doesn't rebuild the page 60 times a second
@@ -122,6 +127,9 @@ impl Studio {
             proxy,
             out: Vec::new(),
             no_save: false,
+            testing: false,
+            check_failed: 0,
+            check_done: false,
             save_at: None,
             dirty_state: false,
             dirty_status: false,
@@ -373,6 +381,25 @@ impl Studio {
             "openFolder" => platform::open_folder(&config::folder()),
             "idle" => self.idle_msg(msg, window),
             "jserr" => eprintln!("page script error: {}", s("m")),
+            "check" if self.testing => {
+                let ok = msg["ok"].as_bool().unwrap_or(false);
+                if ok {
+                    println!("ok   {}", s("name"));
+                } else {
+                    println!("FAIL {}: {}", s("name"), s("detail"));
+                    self.check_failed += 1;
+                }
+            }
+            "checkDone" if self.testing => self.check_done = true,
+            "testDrag" if self.testing => {
+                let paths: Vec<String> = msg["paths"].as_array().map(|a| a.iter().filter_map(|p| p.as_str().map(String::from)).collect()).unwrap_or_default();
+                match s("a").as_str() {
+                    "enter" => self.drag_enter(paths),
+                    "leave" => self.drag_leave(),
+                    "drop" => self.drag_drop(paths),
+                    _ => {}
+                }
+            }
             _ => {}
         }
     }
