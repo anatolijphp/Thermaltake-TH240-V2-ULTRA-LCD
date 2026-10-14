@@ -18,6 +18,8 @@
 *.bin
 *.log
 !/firmware/*.bin
+# the idle-screen glyphs copied from that firmware (src/core/src/idle_text.rs)
+!/src/core/fonts/*.bin
 
 # Studio UI build: npm packages (pinned by src/studio/ui/package-lock.json) and the local bundle
 /src/studio/ui/node_modules/

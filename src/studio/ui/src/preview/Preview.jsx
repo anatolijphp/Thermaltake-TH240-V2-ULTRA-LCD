@@ -96,7 +96,8 @@ export default function Preview() {
             <circle cx="172" cy="172" r="168" style={{ strokeDasharray: `${busy && p > 0 ? (p >= 100 ? ringLen + 1 : ringLen * p / 100) : 0} 1100` }} />
           </svg>
           {view && ST && ST.idleTemp != null && (
-            <div className="idle-temp"><span>{ST.idleTemp}</span><span className="deg">°</span><span>C</span></div>
+            // drawn by the app with the cooler's own fonts and layout (idle_text.rs), so it matches the LCD
+            <img className="disc idle-temp" alt="" src={'idletemp/' + ST.idleTemp + '.png'} style={{ transform: `rotate(${I.angle}deg)` }} />
           )}
           {view && I.img == null && <div className="idle-empty">No idle image yet</div>}
           {!view && (

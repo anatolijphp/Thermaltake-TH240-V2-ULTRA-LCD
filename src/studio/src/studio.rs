@@ -11,7 +11,7 @@ use tao::window::Window;
 use ttlcd_core::config::{self, Config};
 use ttlcd_core::idle::{self, IdleEditor};
 use ttlcd_core::model::{self, DashState, LineDrag, ListKind};
-use ttlcd_core::render::{self, readings};
+use ttlcd_core::render;
 use ttlcd_core::{capture, platform, video, Engine, Mode};
 
 /// What the custom protocol serves besides the page itself (shared with its handler thread).
@@ -564,7 +564,6 @@ impl Studio {
         }
         let e = self.engine.clone();
         let c = e.config();
-        let water = e.coolant();
         let mode_text = match &self.note {
             Some((n, _)) => n.clone(),
             None => model::mode_text(&e),
@@ -585,7 +584,7 @@ impl Studio {
             "forceGame": e.force_game(),
             "paused": e.paused(),
             "videoProgress": e.video_progress(),
-            "idleTemp": if readings::water_valid(water) { Some(water.round() as i64) } else { None },
+            "idleTemp": idle::shown_temp(e.coolant()),
             "full": self.full,
             "svc": if settings { platform::sensor_status() } else { String::new() },
             "aura": aura,

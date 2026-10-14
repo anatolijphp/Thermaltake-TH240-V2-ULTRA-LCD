@@ -64,6 +64,8 @@ fn serve(blobs: &Blobs, req: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> 
         "/app.css" => ("text/css; charset=utf-8", Some(Cow::Borrowed(STYLE.as_bytes()))),
         "/app.js" => ("text/javascript; charset=utf-8", Some(Cow::Borrowed(SCRIPT.as_bytes()))),
         "/icon.png" => ("image/png", Some(Cow::Borrowed(ICON_PNG))),
+        // the coolant temperature as the cooler's idle screen draws it, over the preview's idle picture
+        p if p.starts_with("/idletemp/") => ("image/png", p[10..].trim_end_matches(".png").parse::<i64>().ok().map(|t| Cow::Owned(ttlcd_core::idle_text::overlay_png(t)))),
         p if p.starts_with("/frame/") => ("image/jpeg", blobs.frame().map(|(_, j)| Cow::Owned(j.to_vec()))),
         p if p.starts_with("/idle/") => ("image/jpeg", blobs.idle.lock().unwrap().as_ref().map(|j| Cow::Owned(j.to_vec()))),
         p if p.starts_with("/thumb/") => ("image/jpeg", blobs.thumb.lock().unwrap().as_ref().map(|j| Cow::Owned(j.to_vec()))),

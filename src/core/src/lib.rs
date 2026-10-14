@@ -7,6 +7,7 @@ pub mod engine;
 pub mod games;
 pub mod hid;
 pub mod idle;
+pub mod idle_text;
 pub mod lcd;
 #[cfg(target_os = "linux")]
 mod linux_games;

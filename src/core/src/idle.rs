@@ -122,29 +122,21 @@ impl IdleEditor {
     }
 }
 
-/// What the cooler's own idle screen shows: the stored picture with the coolant temperature over it (the LX800
-/// firmware draws the number centred about 100 px from the top, a small degree sign, then the unit). Upright.
-/// Sent as the last live frame when streaming stops, so the LCD changes at once instead of only after the
-/// firmware's no-frames timeout; then the firmware's own idle screen takes over showing the same picture.
+/// The coolant temperature the idle screen shows (whole degrees, as the firmware prints it), None while there is no
+/// valid reading.
+pub fn shown_temp(coolant: f64) -> Option<i64> {
+    crate::render::readings::water_valid(coolant).then(|| crate::idle_text::degrees(coolant))
+}
+
+/// What the cooler's own idle screen shows: the stored picture with the coolant temperature drawn over it by the
+/// firmware's own fonts and layout (idle_text). Upright. Sent as the last live frame when streaming stops, so the
+/// LCD changes at once instead of only after the firmware's no-frames timeout; then the firmware's own idle screen
+/// takes over showing the same picture.
 pub fn lcd_frame(coolant: f64) -> Option<tiny_skia::Pixmap> {
-    use crate::render::{paint, rgb, text::fonts};
     let pic = render::decode(&stored()?)?;
     let mut p = render::compose(Some(&pic), false, 0);
-    if crate::render::readings::water_valid(coolant) {
-        let f = fonts();
-        let (fam, big, small, top) = ("Segoe UI", 94.0f32, 47.0f32, 92.0f32);
-        let num = format!("{}", coolant.round_ties_even() + 0.0);
-        let (wn, wd, wc) = (f.width(fam, false, big, &num), f.width(fam, false, small, "°"), f.width(fam, false, big, "C"));
-        let mut x = (480.0 - wn - wd - wc) / 2.0;
-        let pt = paint(rgb(0xFFFFFF));
-        let shadow = paint(crate::render::rgba(0, 0, 0, 140));
-        for (t, size, y) in [(num.as_str(), big, top), ("°", small, top + 6.0), ("C", big, top)] {
-            if let Some(path) = f.path(fam, false, false, size, x, y, t) {
-                p.fill_path(&path, &shadow, tiny_skia::FillRule::Winding, tiny_skia::Transform::from_translate(2.0, 2.0), None);
-                p.fill_path(&path, &pt, tiny_skia::FillRule::Winding, tiny_skia::Transform::identity(), None);
-            }
-            x += f.width(fam, false, size, t);
-        }
+    if let Some(t) = shown_temp(coolant) {
+        crate::idle_text::draw_temperature(&mut p, t);
     }
     Some(p)
 }

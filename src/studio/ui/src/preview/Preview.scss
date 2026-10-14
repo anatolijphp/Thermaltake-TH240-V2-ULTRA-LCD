@@ -133,34 +133,10 @@
       }
     }
 
-    // coolant temperature over the idle picture, where the firmware draws it (top half of the circle)
+    // coolant temperature over the idle picture: an image the app draws with the cooler's own fonts and layout
+    // (core/src/idle_text.rs), the same as the frame it sends before the cooler's idle screen takes over
     &-temp {
-      position: absolute;
-      left: 6px;
-      top: 6px;
-      width: 332px;
-      height: 166px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      transform: translateY(16px);
       pointer-events: none;
-      color: #fff;
-      font-size: 64px;
-      line-height: 1;
-      text-shadow: 0 0 6px rgba(0, 0, 0, .6);
-
-      > span {
-        display: block;
-      }
-
-      .deg {
-        font-size: 32px;
-        align-self: flex-start;
-        margin: 0 1px;
-        position: relative;
-        top: calc(50% - 26px);
-      }
     }
 
     &-empty {
