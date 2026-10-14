@@ -1,11 +1,18 @@
 name: build
 
 on:
+  # pushes to main, release tags and ci/** test branches; any other branch runs through its pull request (a branch
+  # that is both pushed and in a PR would otherwise run everything twice)
   push:
-    branches: [main, 'ci/**', rust-port]
+    branches: [main, 'ci/**']
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+
+# a newer commit on the same branch / PR cancels the run still going for the older one
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 # Both jobs build with the toolchain src/fetch.* downloads into tools/ (Rust 1.98.0, llvm-mingw; pinned + SHA256),
 # not the runner's preinstalled Rust, so CI proves a clean machine needs nothing installed. The download cache only
@@ -21,7 +28,8 @@ jobs:
           path: |
             tools/dl/rs
             tools/cargo-home/registry
-          key: rs-windows-${{ hashFiles('src/fetch.cmd', 'src/Cargo.lock') }}
+            tools/npm-cache
+          key: rs-windows-${{ hashFiles('src/fetch.cmd', 'src/Cargo.lock', 'src/studio/ui/package-lock.json') }}
           restore-keys: rs-windows-
 
       # build\windows\app (the installed layout) and build\windows\TTLcdStudio-Setup.exe; also compiles extras\rescue (C#) and checks
@@ -65,7 +73,7 @@ jobs:
         run: |
           set PATH=%CD%\tools\rust\bin;%CD%\tools\llvm-mingw\bin;%PATH%
           set CARGO_HOME=%CD%\tools\cargo-home
-          cd rs
+          cd src
           cargo build --release --locked -p ttlcd-aura-hal --example probe --target i686-pc-windows-gnullvm || exit /b 1
           cargo build --release --locked -p ttlcd-aura-hal --example probe --target x86_64-pc-windows-gnullvm || exit /b 1
           cd ..
@@ -127,17 +135,18 @@ jobs:
           path: |
             tools/dl/rs
             tools/cargo-home/registry
-          key: rs-linux-${{ hashFiles('src/fetch.sh', 'src/Cargo.lock') }}
+            tools/npm-cache
+          key: rs-linux-${{ hashFiles('src/fetch.sh', 'src/Cargo.lock', 'src/studio/ui/package-lock.json') }}
           restore-keys: rs-linux-
 
       # Runtime libraries only (what an Ubuntu desktop already has): src/fetch.sh links against them through
       # pkg-config stubs, so no -dev packages. cc is on the runner (a machine without it gets Zig from fetch.sh).
-      # ./build.sh builds the .debs and the tarball, and cross-builds the Windows app as a check.
+      # ./build.sh linux builds the .debs and the tarball (the Windows job builds the Windows app natively).
       - name: Build
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends libwebkit2gtk-4.1-0 libgtk-3-0t64 >/dev/null
-          ./build.sh
+          ./build.sh linux
 
       - name: Unit tests
         run: |
