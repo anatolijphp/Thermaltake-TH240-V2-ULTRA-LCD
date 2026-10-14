@@ -1,0 +1,25 @@
+// Design tokens of the Armoury-Crate-style design (from the WPF MainWindow.xaml), shared by every component:
+// `@use 'tokens' as *;`
+$bg: #070707;
+$panel: #0D0D0E;
+$card: #131314;
+$cardhi: #1B1B1D;
+$line: #29292C;
+$linehi: #46464B;
+$text: #EDEDED;
+$dim: #8F8F94;
+$accent: #FF1F4B;
+$accent2: #00E1FF;
+$status: #FF7A90;
+$accentdim: #4A1020;
+$rgb: linear-gradient(90deg, #FF1F4B 0%, #FF8A00 17%, #FFE600 33%, #2BE36B 50%, #00E1FF 67%, #7A4BFF 83%, #FF2BD6 100%);
+$glow: 0 0 16px rgba(255, 31, 75, .75);
+$glowsoft: 0 0 10px rgba(255, 31, 75, .55);
+$ease: cubic-bezier(.215, .61, .355, 1);
+$nav: 214px;
+$nav-collapsed: 66px;
+
+// the cut top-right corner of cards
+@mixin cut-corner($size: 14px) {
+  clip-path: polygon(0 0, calc(100% - #{$size}) 0, 100% $size, 100% 100%, 0 100%);
+}

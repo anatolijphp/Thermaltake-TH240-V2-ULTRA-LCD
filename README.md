@@ -4,13 +4,13 @@
 
 **Open replacement software for the round 2.1" LCD on the Thermaltake TH240 V2 Ultra ARGB (CL-W383) AIO cooler.**
 
-No TT RGB Plus, no frameworks to install, no telemetry. One small Windows app built by reverse engineering the cooler's
-USB protocol.
+No TT RGB Plus, no frameworks to install, no telemetry. One small app for Windows and Ubuntu, built by reverse
+engineering the cooler's USB protocol.
 
 [![build](https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD/actions/workflows/build.yml/badge.svg)](https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD/actions/workflows/build.yml)
 [![release](https://img.shields.io/github/v/release/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD?include_prereleases&label=release)](https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD/releases)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Ubuntu-0078d4)
-![.NET](https://img.shields.io/badge/.NET%20Framework-4.8%20(built%20in)-512bd4)
+![Rust](https://img.shields.io/badge/Rust-1.98%20(bundled%20toolchain)-b7410e)
 
 <img src="docs/media/dashboard.gif" alt="A tour of TT LCD Studio: dashboard, display modes, device and settings, with the live cooler preview" width="860">
 
@@ -27,7 +27,7 @@ USB protocol.
 | 🎮 **Game mode** | Detects games and lowers the frame rate and sensor polling, or hands the screen back to the cooler's idle picture |
 | 🖼️ **Idle picture** | Crop, compress, upload and verify the picture the cooler shows on its own |
 | 🔄 **One rotation setting** | Turns the live picture and the cooler's own idle and boot screens together |
-| 🪶 **Light** | Under 1 MB, no runtimes to install: it uses only what ships with Windows |
+| 🪶 **Light** | A few MB of native code, no runtimes to install: on Windows it uses only what ships with Windows (WebView2 included) |
 
 ## Screens
 
@@ -95,20 +95,19 @@ Uninstalling keeps your settings in `%APPDATA%\ttlcd`. The shared Aura plugin an
 
 ### Ubuntu / Linux
 
-TT LCD Studio runs on Ubuntu too, with the same look: a native GTK window over the same engine and settings.
+TT LCD Studio runs on Ubuntu too: the same window (the same UI, in the system's WebKitGTK) over the same engine and settings.
 
 <img src="docs/media/ubuntu.gif" alt="TT LCD Studio on Ubuntu: dashboard, display modes (Clock, Colour, Aura Sync), device and settings pages with the live preview" width="860">
 
 ```
-sudo apt install ./ttlcd-studio_1.3.3_all.deb   # from the release, or open the file in the App Center
-ttlcd-studio                                     # or "TT LCD Studio" in the app menu
+sudo apt install ./ttlcd-studio_2.0.0_amd64.deb   # from the release, or open the file in the App Center
+ttlcd-studio                                       # or "TT LCD Studio" in the app menu
 ```
 
 `ttlcd-studio` is the only file you need: it includes the `ttlcd` command and background service too (and
-replaces the `ttlcd` package if that is installed). Without the window, `ttlcd_<version>_all.deb` alone has just
-the command and the service. Studio bundles GTK# 3 itself, since Debian dropped `libgtk3.0-cil` from its archives
-in 2023 and it's gone from Ubuntu entirely from 25.10 onward. Only the native GTK3/GLib/Pango/Atk/Cairo libraries
-are needed from the system - those are still part of any current desktop - so it installs cleanly on 26.04 too.
+replaces the `ttlcd` package if that is installed). Without the window, `ttlcd_<version>_amd64.deb` alone has just
+the command and the service, and needs nothing but the C library. Both are native programs; the window uses the
+system's GTK 3 and WebKitGTK 4.1 (part of any current Ubuntu desktop, 22.04 to 26.04).
 
 - **Everything Linux can do, in the window:**
   - dashboard
@@ -137,42 +136,57 @@ ttlcd config                              # all settings (~/.config/ttlcd/config
 ```
 
 Studio stops this service while its window is open, so the two never drive the cooler at the same time. Other
-distributions: unpack `ttlcd-<version>-linux.tar.gz` to `/` and install Mono and libgdiplus (and the native GTK3
-libraries from "Everything Linux can do" above, for the window).
+distributions: unpack `ttlcd-<version>-linux-x86_64.tar.gz` to `/` (`sudo tar -xzf ... -C /`); the window needs
+GTK 3 and WebKitGTK 4.1 from the distribution.
 </details>
 
 ## Build from source
 
-**Windows:** `build.cmd` uses the .NET Framework 4.8 C# compiler that ships with it. No SDK,
-no NuGet. **Linux:** `./build.sh` with Mono (`sudo apt install mono-devel`) and `curl`; it compiles the same
-sources and fetches GTK# 3 itself (pinned, checksummed, see `build.sh`) rather than needing it preinstalled.
+The app is written in Rust (`src/`), its window UI in React + Sass. The build fetches its own toolchain into `tools/`
+(Rust 1.98.0, llvm-mingw and Node.js 24 LTS, pinned by version and SHA256, `src/fetch.sh` / `src\fetch.cmd`; npm
+packages are pinned by `src/studio/ui/package-lock.json`), so there is nothing to install: no rustup, no Visual Studio,
+no system Node.
 
 ```
 git clone https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD.git
 cd Thermaltake-TH240-V2-ULTRA-LCD
-build.cmd
+build.cmd                      # Windows: build\windows\
+./build.sh [all|linux|windows] # Linux: build/linux/ and, cross-linked with llvm-mingw, build/windows/
 ```
 
-Sources and build output are kept apart. Everything built lands in `build\<os>\` (only Windows so far):
+To try the new build without installing it:
+```
+run.cmd                        # Windows: Studio from build\windows\app (builds first if nothing is built)
+run.cmd ttlcd info             # Windows: the command-line tool
+./run.sh                       # Linux: Studio (rebuilds first when the sources are newer)
+./run.sh ttlcd info            # Linux: the command-line tool
+```
+`--build` as the first argument forces a rebuild. Studio takes over the cooler while it runs (on Linux it stops the
+`ttlcd` user service); close an installed Studio first.
+
+On Linux the build needs `curl`, `xz`, `dpkg` and the GTK 3 / WebKitGTK 4.1 runtime libraries a desktop already has
+(no `-dev` packages: it links through generated pkg-config stubs). Without a C compiler it fetches Zig as the linker.
+The version comes from `src/Cargo.toml` (`[workspace.package]`).
 
 | `build\windows\` | What |
 |---|---|
-| `app\TTLcdStudio.exe` | The app (WPF + tray). `app\` has the installed layout and runs as is |
+| `app\TTLcdStudio.exe` | The app (window + tray). `app\` has the installed layout and runs as is |
 | `app\ttlcd.exe` | Command-line tool; also installs the driver, the Aura plugin and the sensor service |
-| `app\TTLcdAura.dll` | Armoury Crate / Aura Sync plugin |
+| `app\TTLcdAura.dll`, `app\TTLcdAura64.dll` | Armoury Crate / Aura Sync plugin (32-bit, as LightingService loads it; 64-bit) |
 | `app\driver\`, `app\firmware\` | Virtual display driver; LCD firmware and rescue tools |
 | `TTLcdStudio-Setup.exe` | The installer |
 
 | `build/linux/` | What |
 |---|---|
-| `ttlcd_<version>_all.deb` | Debian/Ubuntu package: `ttlcd` (CLI + service), udev rule, systemd user service |
-| `ttlcd-studio_<version>_all.deb` | Debian/Ubuntu package: `ttlcd-studio` (GTK window, bundles GTK# 3), menu entry, plus everything in `ttlcd` (replaces it) |
-| `ttlcd-<version>-linux.tar.gz` | The same files for other distributions |
+| `ttlcd_<version>_amd64.deb` | `ttlcd` (CLI + service), udev rule, systemd user service |
+| `ttlcd-studio_<version>_amd64.deb` | `ttlcd-studio` (the window), menu entry, plus everything in `ttlcd` (replaces it) |
+| `ttlcd-<version>-linux-x86_64.tar.gz` | The same files for other distributions |
 | `pkg/`, `pkg-studio/` | The installed layouts |
 
-Every push runs [GitHub Actions](.github/workflows/build.yml) on Windows and Ubuntu: build, firmware checksum check, a
-silent install and uninstall smoke test, and an install of the `.deb` into a clean Ubuntu container that renders
-frames. Tags `v*` publish a release with the files for both.
+Every push runs [GitHub Actions](.github/workflows/build.yml) on Windows and Ubuntu with the same bundled toolchain:
+build, firmware checksums, a check that `PatchPanel` rebuilds the shipped firmware byte for byte, the Aura plugin
+self-test, a silent install and uninstall, an install of both `.deb`s into a clean Ubuntu container that renders
+frames, and screenshots of every Studio page on both systems. Tags `v*` publish a release with the files for both.
 
 ## Command line
 
@@ -197,30 +211,67 @@ The LCD has its own controller (Nuvoton W55FA93) behind a USB HID interface: one
 (brightness, rotation, sensor queries) and one for 480×480 JPEG frames. Studio renders each frame (mode, overlay,
 rotation), encodes it and streams it at up to 30 fps. The protocol is documented in [`docs/protocol.md`](docs/protocol.md).
 
-| Path | What |
-|---|---|
-| [`src/`](src) | Engine, protocol, CLI and the shared Studio logic; the WPF window (Windows) |
-| [`src/gtk/`](src/gtk) | The GTK window (Linux) |
-| [`aura/`](aura) | Armoury Crate HAL plugin |
-| [`installer/`](installer) | Installer and uninstaller |
-| [`driver/`](driver) | Bundled MttVDD virtual display driver (signed, MIT) |
-| [`firmware/`](firmware) | LCD controller firmware and the burn guide |
-| [`rescue/`](rescue) | Firmware tool sources |
-| [`docs/`](docs) | Protocol notes and README media |
-| [`re/scripts/`](re/scripts) | Ghidra scripts used for the reverse engineering |
-| [`tools-src/`](tools-src) | Icon generator |
+## Project layout
+
+```
+ttlcd/
+├── build.sh, build.cmd     Build everything (Linux host / Windows host); they call src/build.*
+├── run.sh, run.cmd         Run the new build from build/ without installing
+├── README.md, CLAUDE.md    This file; developer handover notes (hardware state, protocol, layout)
+│
+├── src/                    The app (Rust, one cargo workspace)
+│   ├── Cargo.toml/.lock    Workspace, version, pinned dependencies
+│   ├── .cargo/config.toml  Output folder and Windows linker settings (llvm-mingw, static CRT)
+│   ├── fetch.sh, fetch.cmd Download the pinned toolchain into tools/ (SHA256-checked)
+│   ├── build.sh, build.cmd The build: binaries, Windows app folder and installer, Linux packages
+│   ├── app.ico             App icon (embedded into the Windows exes)
+│   ├── core/               Shared library, no UI:
+│   │   ├── hid/              USB HID access (Linux hidraw, Windows SetupAPI)
+│   │   ├── lcd.rs            Cooler protocol: frames, brightness, rotation, queries, idle picture
+│   │   ├── engine.rs         Render / send / control / game-detection threads
+│   │   ├── render/           Frames: text from system fonts, round-panel fitting, effects
+│   │   ├── config.rs         Settings (config.xml)
+│   │   ├── model.rs, idle.rs What Studio shows: texts, panels, rotation, line editor, idle picture
+│   │   ├── aura.rs           Aura Sync state reader and visualiser
+│   │   └── win/              Windows only: screen capture, video, game detection, virtual display,
+│   │                         Aura plugin install, CPU temperature service
+│   ├── cli/                ttlcd: command line and Linux screen service (ttlcd run)
+│   ├── studio/             TT LCD Studio: window and tray
+│   │   ├── ui/               The interface, the same on both systems: React components, each a folder with
+│   │   │   │                 Name.jsx + Name.scss (Sass), bundled by esbuild (build.mjs) during the cargo build
+│   │   │   ├── src/components/ Reusable parts (title bar, nav, slider, switch, segmented toggle, card, gauge, ...)
+│   │   │   ├── src/pages/      Dashboard, Display modes (tiles, line editor, video, text style), Device, Settings
+│   │   │   ├── src/preview/    The round live / idle preview, drag-and-drop target
+│   │   │   └── src/bridge.js   Messages to and from the Rust side
+│   │   └── src/os/           System-specific parts (linux.rs, windows.rs, WebView2 loader)
+│   ├── aura-hal/           TTLcdAura.dll: Armoury Crate / Aura Sync plugin (32- and 64-bit)
+│   └── installer/          TTLcdStudio-Setup.exe and ttlcd-pack (packs the app into the installer)
+│
+├── linux/                  Debian packaging: control files, udev rule, systemd user unit, desktop entry, icon
+├── driver/                 Bundled MttVDD virtual 480×480 display driver (signed, MIT)
+├── firmware/               LCD controller firmware, Nuvoton helper, pin photo and the burn guide
+├── docs/                   Protocol notes and README media
+├── .github/workflows/      CI: Windows and Linux builds, tests, releases
+│
+├── extras/                 Tools that are not part of Studio
+│   ├── rescue/               ttrescue (firmware recovery) and PatchPanel, C#; built into app\firmware\
+│   ├── re/                   Reverse engineering: Ghidra launchers and scripts
+│   └── tools-src/            Icon generator
+│
+├── tools/                  (not in git) Toolchain and reverse-engineering tools, fetched or copied locally
+└── build/                  (not in git) Output: windows/app/, windows/TTLcdStudio-Setup.exe, linux/*.deb,
+                            and target/ (compiler intermediate files)
+```
+
+`core` is the base that `cli` and `studio` share. `aura-hal` is standalone: it runs inside ASUS LightingService and
+only shares the memory layout with `core`. `installer` packs whatever is in `build/windows/app/`.
 
 <details>
-<summary>Recording the README GIFs</summary>
+<summary>README media</summary>
 
-`TTLcdStudio.exe --record docs\media\<scene>.gif <dashboard|modes|style|game>` plays a scripted scene in an
-off-screen window and saves it as a GIF ([`src/Record.cs`](src/Record.cs)). Close the running Studio first; the scenes
-change settings like a user would, so restore `%APPDATA%\ttlcd\config.xml` afterwards. For the GIF mode, set
-`TTLCD_REC_GIF` to an animated GIF to play.
-
-On Linux, `ttlcd-studio --record docs/media/ubuntu.gif tour 0.7` records the Ubuntu tour in the real window
-([`src/gtk/Record.cs`](src/gtk/Record.cs), the same GIF writer). Point `XDG_CONFIG_HOME` at a copy of the config
-so the mode changes don't touch your own settings.
+The GIFs above were recorded with version 1.x (C#, in the git history before 2.0).
+The Rust Studio renders single pages with `--screenshot <png> <dashboard|modes[:Mode]|device|settings|idle>`, which
+CI runs on both systems.
 </details>
 
 ## ⚠️ Warnings

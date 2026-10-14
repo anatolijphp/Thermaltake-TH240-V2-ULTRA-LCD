@@ -1,0 +1,6 @@
+.dashboard {
+  .gauges { display: grid; gap: 0 14px; }
+  .gauge-card { display: flex; justify-content: center; }
+  .dash-note { margin-left: 2px; }
+  .cpu-hint { margin: 6px 0 0 2px; }
+}

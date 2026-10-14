@@ -11,10 +11,10 @@ flash on the board. This folder has the firmware that runs on our cooler today, 
 | `hardware_boot_pins.jpg` | Where to short the flash pins to force the chip into ROM recovery mode. |
 | `SHA256SUMS.txt` | Checksums of the files above. |
 
-Tools (built by `build.cmd` from `rescue/` into `build\windows\app\firmware\`; the installer puts them in the installed
+Tools (built by `build.cmd` from `extras/rescue/` into `build\windows\app\firmware\`; the installer puts them in the installed
 `firmware\` folder):
-- `ttrescue.exe`: reads, writes and verifies the flash through the chip's recovery mode. Source: `rescue/Rescue.cs`.
-- `PatchPanel.exe` (build folder only): rebuilds `lx800_tt021panel.bin` from `make_fix.bin`. Source: `rescue/PatchPanel.cs`.
+- `ttrescue.exe`: reads, writes and verifies the flash through the chip's recovery mode. Source: `extras/rescue/Rescue.cs`.
+- `PatchPanel.exe` (build folder only): rebuilds `lx800_tt021panel.bin` from `make_fix.bin`. Source: `extras/rescue/PatchPanel.cs`.
 
 ## When do you need this?
 

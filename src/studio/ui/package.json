@@ -1,0 +1,17 @@
+{
+  "name": "ttlcd-studio-ui",
+  "private": true,
+  "description": "TT LCD Studio UI: React components with a Sass file next to each, bundled by esbuild (build.mjs). Built by the studio crate's build.rs with the Node.js from tools/node.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs dist"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "sass": "1.105.1"
+  }
+}

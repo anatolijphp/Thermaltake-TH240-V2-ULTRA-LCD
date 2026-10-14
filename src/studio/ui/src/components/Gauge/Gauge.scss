@@ -1,0 +1,9 @@
+@use 'tokens' as *;
+
+.gauge { width: 100%; max-width: 180px; display: block;
+  .track { stroke: #242427; stroke-width: 11; fill: none; stroke-linecap: round; }
+  .arc { stroke-width: 11; fill: none; stroke-linecap: round; }
+  svg.i { stroke-width: 1.8; }
+  .num { font-size: 34px; font-weight: 700; fill: $text; text-anchor: middle; dominant-baseline: central; }
+  .glabel { font-size: 11px; font-weight: 700; text-anchor: middle; }
+}

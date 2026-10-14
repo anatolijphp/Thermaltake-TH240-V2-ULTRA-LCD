@@ -10,11 +10,15 @@
 /tools/
 
 # reverse-engineering workspace: Ghidra projects, outputs and vendor binaries stay local
-/re/*
-!/re/scripts/
-!/re/*.cmd
+/extras/re/*
+!/extras/re/scripts/
+!/extras/re/*.cmd
 
 # flash dumps and logs (the firmware we ship is in firmware/, see the exception below)
 *.bin
 *.log
 !/firmware/*.bin
+
+# Studio UI build: npm packages (pinned by src/studio/ui/package-lock.json) and the local bundle
+/src/studio/ui/node_modules/
+/src/studio/ui/dist/

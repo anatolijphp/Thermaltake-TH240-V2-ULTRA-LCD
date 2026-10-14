@@ -1,0 +1,27 @@
+[package]
+name = "ttlcd-studio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ttlcd-studio"
+path = "src/main.rs"
+
+[dependencies]
+ttlcd-core = { path = "../core" }
+tao = { version = "0.37", default-features = false, features = ["rwh_06", "x11"] }
+wry = "0.57"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tray-icon = "0.26"
+rfd = { version = "0.17", default-features = false, features = ["gtk3"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+# Windows platform code (src/os/windows.rs, src/os/webview2_loader.rs)
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Threading", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Com", "Win32_Graphics_Gdi", "Win32_Graphics_Dwm", "Win32_Storage_Xps", "Win32_UI_WindowsAndMessaging"] }
+png = "0.18"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"

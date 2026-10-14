@@ -6,4 +6,4 @@ Exec=ttlcd-studio
 Icon=ttlcd-studio
 Categories=Utility;System;
 Terminal=false
-StartupWMClass=TTLcdStudio.exe
+StartupWMClass=ttlcd-studio

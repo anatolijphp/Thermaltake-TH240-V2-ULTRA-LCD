@@ -1,13 +1,16 @@
-# TT LCD project: handover / state (last updated 2026-10-11)
+# TT LCD project: handover / state (last updated 2026-10-14)
 
 This is replacement software for the LCD on a **Thermaltake TH240 V2 Ultra ARGB (CL-W383-PL12SW-A)** AIO. It was
 built by reverse engineering TT RGB Plus.
 
 Owner rules:
-- **Install nothing.** Use only built-in Windows tools (C# 5 / .NET 4.8 `csc`) and files inside this folder.
+- **Install nothing.** Use only built-in OS tools and files inside this folder. The Rust toolchain is files in the
+  gitignored `tools/` (fetched by `src/fetch.sh` / `src/fetch.cmd`, pinned versions + SHA256), not an install.
 - A driver is allowed only if this tool installs and uninstalls it.
 - Do the work yourself, with no "split the work".
-- Linux: Ubuntu build with the GTK Studio window, CLI and screen service (see "Linux" below).
+- Only Studio and its dependencies were rewritten (Rust, 2.0). `tools/`, `firmware/` and the rescue tools stay as they
+  are. Tools not related to Studio live in `extras/`.
+- Linux: Ubuntu build with the Studio window, CLI and screen service (see "Linux" below).
 
 Full conversation transcript (very long):
 `C:\Users\anato\.claude\projects\C--Users-anato\87ff2591-a9e9-489b-9bea-a8a27fdb3ba3.jsonl`
@@ -36,46 +39,50 @@ Full conversation transcript (very long):
 
 ## Build
 
-Sources and build output are separate. Everything built goes to `build\<os>\` (only `build\windows\` so far; Linux
-will get `build\linux\`). Nothing built lives in the source folders.
+Version 2.0 is Rust: `src/` is a cargo workspace. The C# 1.x Studio was removed; it is in the git history (tag/commit
+before 2.0, e.g. `ed769c0` = 1.3.3).
 
-`build.cmd` builds `ttlcd.exe` (CLI), `TTLcdStudio.exe` (WPF app + tray) and `TTLcdAura.dll` (Aura plugin) into
-`build\windows\app\` with `%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe`. That folder has the installed
-layout (`driver\` and `firmware\` are copied in), so it runs as is; the owner's Studio and its autostart entry run from
-there. Binary names must differ by more than case.
-Binaries in use (Studio, or the elevated `ttlcd hwmon` helper) are renamed to `*.old` before compiling, since a
-running exe can be renamed but not overwritten. Leftovers are deleted on a later build. Running processes keep the old
-code until they restart. It also builds:
-- the `rescue/` tools (x86 `csc`) into `build\windows\app\firmware\`
-- `build\windows\TTLcdStudio-Setup.exe` from `installer/Setup.cs`, with `build\windows\app` embedded as
-  `payload/<path>` resources
-
-The version is in `src/Version.cs`. `.github/workflows/build.yml` builds Windows and Linux, checks the firmware
-checksums, smoke-tests a silent install and uninstall, tests the .deb in a container, and a `v*` tag releases both.
+- Toolchain: `src/fetch.sh` (Linux host) / `src/fetch.cmd` (Windows host; only curl.exe, tar.exe, certutil.exe) put
+  Rust 1.98.0 (+ std for x86_64/i686 Windows), llvm-mingw 20260922 and Node.js 24.21.0 into `tools/`; npm packages
+  come from `npm ci` (pinned by `src/studio/ui/package-lock.json`, cache in `tools/npm-cache`); crates go to
+  `tools/cargo-home` (pinned by `src/Cargo.lock`). Windows targets are `*-pc-windows-gnullvm` linked by llvm-mingw:
+  no Visual Studio. On Linux the GTK/WebKitGTK crates link against the desktop's own runtime libraries through
+  pkg-config stubs in `tools/linux-pc` (no `-dev` packages). Without a C compiler fetch.sh also brings Zig as linker.
+- `build.sh` (Linux host: Linux packages + Windows cross-build) and `build.cmd` (Windows host) call `src/build.sh` /
+  `src/build.cmd`. Intermediate files go to `build/target/`. Outputs:
+  - `build\windows\app\` = installed layout: `ttlcd.exe`, `TTLcdStudio.exe` (renamed `ttlcd-studio` bin),
+    `TTLcdAura.dll` (i686) + `TTLcdAura64.dll`, `driver\`, `firmware\` (files from `firmware\` + `ttrescue.exe` and
+    `PatchPanel.exe`, the C# tools from `extras/rescue` compiled with x86 `csc` on Windows or Mono `mcs` on Linux;
+    the build checks PatchPanel rebuilds `lx800_tt021panel.bin` byte for byte).
+  - `build\windows\TTLcdStudio-Setup.exe` = installer stub + payload packed by the host tool
+    `cargo run -p ttlcd-setup --bin ttlcd-pack -- <stub> build/windows/app <out>` (format in `src/installer/src/pack.rs`).
+  - `build/linux/ttlcd_<ver>_amd64.deb`, `ttlcd-studio_<ver>_amd64.deb`, `ttlcd-<ver>-linux-x86_64.tar.gz`.
+- `run.sh` (Linux) / `run.cmd` (Windows) run the new build from `build/` without installing: Studio, or
+  `run.sh ttlcd <command>` for the CLI; `--build` forces a rebuild (run.sh also rebuilds when sources are newer).
+- The version is `[workspace.package] version` in `src/Cargo.toml`. In-use binaries are renamed to `*.old` before
+  copying (Windows). Binary names must differ by more than case.
+- Dev build by hand: `cd rs; export PATH=$PWD/../tools/rust/bin:$PWD/../tools/llvm-mingw/bin:$PATH
+  CARGO_HOME=$PWD/../tools/cargo-home PKG_CONFIG_LIBDIR=$PWD/../tools/linux-pc/pkgconfig`, then
+  `cargo build -p <crate> [--target x86_64-pc-windows-gnullvm]`, `cargo test -p ttlcd-core -p ttlcd-aura-hal -p ttlcd-setup`.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `src/Hid.cs` | SetupAPI/hid.dll P/Invoke. `Enumerate(vid,pid,queryCaps)`: `false` avoids a ~5 s MI_00 stall |
-| `src/Lcd.cs` | Protocol. VID/PID 264A:233C, falling back to 1A2C:151D. `Global\TTLcd.Device` single-writer mutex |
-| `src/Render.cs` `Capture.cs` `Video.cs` | Compose/rotate/JPEG; GDI screen capture; Media Foundation video → 480×480 frames (cached) |
-| `src/Engine.cs` | Renderer + sender threads; control/upload jobs on the control thread; `timeBeginPeriod(1)` |
-| `src/Config.cs` | `%APPDATA%\ttlcd\config.xml`. Modes: VirtualDisplay, Monitor, Image, Gif, Video, Color, Clock, Aura, Off |
-| `src/Studio.cs` `StudioModel.cs` `Readings.cs` `IdleEditor.cs` `Platform.cs` | UI-free Studio logic shared by both windows: StudioCore (engine, debounced save), texts/panels/rotation/dashboard, reading lines + LineDrag, idle-picture pipeline, IPlatform (Windows/Linux services). build.cmd list `STUDIO` |
-| `src/App.cs` `MainWindow.xaml` | Windows window (WPF) over the shared core: tray, `--tray`, `--screenshot`, `--record` dev aids |
-| `src/gtk/` | Linux window (GTK# 3 + Cairo, styled like the WPF one): `StudioWindow` (+ `Pages`, `IdleView`), `Controls`/`Widgets` (custom-drawn seg toggle, slider, switch, tiles, gauges, round preview, icons), `LineEditor`, `Tray` (AppIndicator, single instance via 127.0.0.1:47913), `Theme` (colours + CSS) |
-| `src/VirtualDisplay.cs` + `driver/` | Bundled MttVDD IddCx virtual 480×480 monitor (for Wallpaper Engine); install/uninstall |
-| `src/Aura.cs` + `aura/AuraHal.cs` | ASUS Aura (Armoury Crate) HAL COM plugin + installer + MilkDrop-style feedback visualiser |
-| `src/Storage.cs` | Idle/boot upload + boot.pak builder. **Dangerous, see above.** Not wired into the UI |
-| `docs/protocol.md` | Protocol notes |
-| `re/` | Ghidra projects (`re/proj`), scripts (`re/scripts/*.java`), launchers (`run.cmd`, `runtw.cmd`, `runlx.cmd`), outputs (`re/out`) |
-| `tools/` | Portable Ghidra 12.1.4 + JDK 21, Nuvoton TurboWriter (analysis only), driver downloads |
-| `build/windows/` | Build output only (not in git): `app\` (runnable, installed layout), `TTLcdStudio-Setup.exe` |
-| `rescue/` | `Rescue.cs` (ttrescue: recovery-mode read/write/verify via SCSI pass-through), `PatchPanel.cs` |
+| `src/core/` | Everything UI-free: `hid/` (hidraw; SetupAPI + overlapped I/O, a timed-out read stays pending), `lcd.rs` (protocol; one lock per interface; `Global\TTLcd.Device` mutex on Windows, flock on Linux), `config.rs` (same `config.xml` as C#), `engine.rs` (render/send/control/game threads, 500 ms keep-alive, LX800 red/blue swap at send time), `render/` (tiny-skia + fontdb/rustybuzz text paths, round-panel fitting, effects), `aura.rs` (TTAS reader + visualiser), `model.rs` (Studio texts/panels/rotation/dashboard/LineDrag), `idle.rs`, `store.rs`, `sensors.rs`, `video.rs`, `capture.rs`, `games.rs`, `platform.rs`, `win/` (Windows: shared memory, registry, elevation, GDI capture, Media Foundation `mf.rs`, games, virtual display `vdd.rs`, `aura_install.rs`, `sensors.rs` helper/service) |
+| `src/cli/` | `ttlcd` command line and screen service (`ttlcd run`) |
+| `src/studio/` | Studio: wry/tao window, tray (tray-icon), `os/linux.rs` + `os/windows.rs`, `studio.rs` (state for the page, messages from it, drag and drop of files). The page is `ui/`: React 19 components, each a folder with `Name.jsx` + `Name.scss` (Sass; shared `styles/_tokens.scss`), bundled by esbuild (`ui/build.mjs`) from build.rs into OUT_DIR and served over a custom protocol (WebView2 on Windows with a built-in loader, no WebView2Loader.dll; WebKitGTK on Linux). `ui/src/bridge.js` = JSON messages out (`window.ipc`), `window.ttlcd.*` calls in, a small store read with `useStore` |
+| `src/aura-hal/` | `TTLcdAura.dll`: Armoury Crate HAL COM plugin written by hand (vtables), i686 + x86_64; `examples/probe.rs` self-test |
+| `src/installer/` | `TTLcdStudio-Setup.exe` (Win32 UI, per-user install/uninstall) and `ttlcd-pack` |
+| `linux/` | Debian packaging: control files, udev rule, systemd user unit, desktop entry, icon |
+| `driver/` | Bundled MttVDD IddCx virtual 480×480 monitor (for Wallpaper Engine) |
 | `firmware/` | Shipped LCD firmware, base image, Nuvoton `FA93_musb.bin` helper, pin photo, `README.md` burn guide |
-| `installer/` | `Setup.cs`: per-user installer and uninstaller (shortcuts, autostart, optional admin parts) |
-| `src/Sensors.cs` | CPU temperature: TOWEI `XYDataCenter.dll` helper (`ttlcd hwmon`) or the `TTLcdSensors` service |
+| `extras/rescue/` | C# `Rescue.cs` (ttrescue: recovery-mode read/write/verify via SCSI pass-through), `PatchPanel.cs` |
+| `extras/re/` | Ghidra projects (`proj`), scripts (`scripts/*.java`), launchers (`run.cmd`, `runtw.cmd`, `runlx.cmd`), outputs (`out`) |
+| `extras/tools-src/` | Icon generator |
+| `tools/` | Not in git: portable Ghidra 12.1.4 + JDK 21, Nuvoton TurboWriter, driver downloads, the Rust toolchain |
+| `src/app.ico` | The app icon, embedded into the Windows exes by the crates' build.rs |
+| `docs/protocol.md` | Protocol notes |
 
 ## Protocol (HKC / Xinyao LCD, both firmwares)
 
@@ -115,28 +122,30 @@ stopping the `ttlcd hwmon` helper, so the helper wasn't the cause. `ttlcd temp` 
 
 ## LCD text / UI
 
-- The panel is round. `Render.DrawRows` places each text line inside the circle and shrinks the block until it fits.
+- The panel is round. `render/readings.rs` (`draw_readings`, port of `Render.DrawRows`) places each text line inside the circle and shrinks the block until it fits.
 - Each reading has its own `ElementStyle` in `Config.ClockStyles` / `OverlayStyles`: font, bold/italic, size,
   effect, colour, label, °F, colour by value. A missing entry falls back to the old global text fields.
 - Line arrangement is `ClockOrder` / `OverlayOrder`, for example `"0,2|3|"`: ids, ',' within a line, '|' ends a
   line. It is built by drag and drop in Studio. Old orders without '|' are converted from the legacy
   layout and breaks fields.
-- `TTLCD_SHOT_SELECT=ClkItems:2` pre-selects a reading for `--screenshot`.
-- `TTLcdStudio.exe --screenshot <png> modes:Clock` renders that mode's options without saving it.
-- `TTLcdStudio.exe --record <gif> <dashboard|modes|style|game>` records the README GIFs (`src/Record.cs`, `src/Gif.cs`) in an
-  off-screen window. Close Studio first and restore `config.xml` afterwards (the scenes change the mode).
-  `TTLCD_SHOT_HEIGHT` renders a taller window.
+- Text is drawn at the true em size (like GDI+ on Windows). Mono's libgdiplus drew it ~16% larger, so Linux 1.x
+  renders looked bigger. Fonts missing on Linux go through `fc-match`; missing glyphs fall back per character.
+- `TTLcdStudio.exe --screenshot <png> <dashboard|modes[:Mode]|device|settings|idle>` (Linux `ttlcd-studio`) renders a
+  page and exits; `TTLCD_SHOT_SELECT=ClkItems:2` pre-selects a reading, `TTLCD_SHOT_HEIGHT` renders taller,
+  `TTLCD_SHOT_JS` runs a script first. `TTLCD_NO_DEVICE=1` never opens the cooler (use it for every test run: a normal
+  Studio start takes the cooler and, on Linux, stops the `ttlcd` service). `TTLCD_DEVTOOLS=1` = web inspector.
+- `--record` (README GIFs) existed only in 1.x (git history).
 
 ## Game mode
 
-`src/Games.cs` detects games using only Windows sources:
+`src/core/src/win/games.rs` detects games using only Windows sources:
 - `SHQueryUserNotificationState` = D3D full-screen
 - the Xbox Game Bar list `HKCU\System\GameConfigStore\Children\*\MatchedExeFullPath`, matched against running
   processes
 - optionally any foreground window covering its monitor
 - user include/ignore exe lists
 
-`Engine.GameLoop` checks every 3 s (~7 ms per check). While a game runs, it applies `GameAction`:
+`Engine::game_loop` checks every 3 s (~7 ms per check). While a game runs, it applies `GameAction`:
 - LowerFps: caps the render delay
 - IdleScreen: renders and sends nothing, so the firmware shows its idle screen
 
@@ -145,77 +154,44 @@ Water temperature is then polled at `GameSensorMs`. The CPU-temp helper reads it
 
 ## Linux
 
-- `build.sh` (Mono `mcs`, file lists taken from `build.cmd` CORE and STUDIO) builds `build/linux/`: `ttlcd.exe` and
-  `TTLcdStudio.exe`, each into its own package: `ttlcd_<ver>_all.deb` (CLI + service, `pkg/`, no GTK dependency)
-  and `ttlcd-studio_<ver>_all.deb` (`pkg-studio/`, bundles GTK# 3 - see below), plus one tarball with both.
-  Packaging files are in `linux/` (launchers `ttlcd` / `ttlcd-studio`, desktop entry, icon, udev rule, systemd
-  user unit, `control` + `control-studio`, postinst).
-  - **`ttlcd-studio` is self-contained (1.3.2):** it carries all of `ttlcd`'s files, postinst and dependencies and
-    declares `Provides/Conflicts/Replaces: ttlcd`. Before, it depended on `ttlcd (= ver)`; the Ubuntu App Center
-    installs one local .deb at a time and failed on that dependency ("ttlcd ... not installable") while its UI
-    just kept spinning. Don't reintroduce a dependency on `ttlcd`. The tarball is Studio's tree.
-  - **Why two packages, and GTK# is bundled, not depended on (2026-10-11):** `libgtk3.0-cil` (GTK# 3) was removed
-    from Debian in 2023 and is gone from Ubuntu entirely from 25.10 questing onward (still in 24.04 noble) - a
-    single package depending on it failed to install on a 26.04 resolute machine. `ttlcd` (CLI + service) has no
-    GTK dependency at all, so it's a separate package that installs everywhere `mono-runtime` does.
-    `ttlcd-studio` can't depend on the system package any more (it's gone for good, not coming back), so
-    `fetch_gtksharp3()` in `build.sh` downloads the last Ubuntu noble build of gtk-sharp3 straight from
-    archive.ubuntu.com (pinned exact version + SHA256, cached in `build/.gtksharp3-cache/`) and bundles the
-    7 managed assemblies + 4 native glue `.so`s next to `TTLcdStudio.exe` in `/usr/lib/ttlcd/`; Mono resolves
-    both from there without the GAC or any system gtk-sharp3 package. The 4 native glue libs' `.dll.config`
-    hardcodes `/usr/lib/ttlcd/lib*sharpglue-3.so` (patched from their original `/usr/lib/cli/...` path at fetch
-    time) - that's where every install (`.deb` or tarball) puts them, regardless of the build machine's own
-    paths. `linux/control-studio`'s `Depends` lists only the native GTK3/GLib/Pango/Atk/Cairo libraries (with
-    `| ...t64` alternatives for the Ubuntu 24.04→26.04 time_t64 package rename) - those aren't going anywhere.
-    Verified end to end on 26.04 resolute: fetched, built, installed via `apt install`, `ttlcd-studio` launched
-    for real (`--screenshot dashboard` rendered the live gauges, cooler detected over hidraw).
-- GTK Studio: Linux modes only (Image, GIF, Colour, Clock, Aura, Off); no game detection (manual game mode); CPU temperature
-  from hwmon. It stops the `ttlcd` user service while open. GTK# is the old 2.99.3 binding: use GTK 3.0 API only (no
-  FlowBox/Stack/HeaderBar, MarginLeft/Right instead of Start/End). `System.Action` must be qualified (Gtk.Action).
-- `TTLcdStudio.exe --screenshot <png> <dashboard|modes[:Mode]|device|settings|idle>` (also `TTLCD_SHOT_SELECT`,
-  `TTLCD_SHOT_HEIGHT`) reads the window pixels from X; CI runs it under Xvfb and uploads `screenshots-linux` next to the
-  WPF `screenshots-windows`. No local Mono/GTK (install-nothing rule): the Linux UI is checked through these.
-- Aura on Linux (2026-10-11): `AuraState.ReadLinux()` reads `$XDG_RUNTIME_DIR/armory-crate/virtual/ttlcd.ttas`.
-  That file is the same TTAS block the Windows plugin writes. It is published by armory-crated, the Linux Aura Sync
-  service in `~/Armory-crate` (`armory-crate virtual add ttlcd`; spec in its `docs/virtual-devices.md`).
-  - Its writer uses a seqlock (odd seq = mid-write) and sends finished frames as effect 0 ("Manual").
-  - Each read opens the file fresh, twice, unbuffered. A block that is torn, odd or closed (magic 0) returns null,
-    which shows "Waiting for armory-crated".
-  - `AuraState.LinuxServiceInstalled()` (the `armory-crated.service` user unit or the TTAS file exists) greys out
-    the Aura tile and tray item until armory-crate is installed. It is rechecked every 3 s. A config already set to
-    Aura keeps it. `ttlcd set Mode Aura` only prints a note.
-  - Verified end to end against the LCD itself (2026-10-11): `armory-crated` running with `virtual:ttlcd` enabled,
-    TTAS block inspected directly (seq even and climbing, magic correct, 8 live colours), then `ttlcd run` with
-    Mode=Aura reported `Aura Sync · Manual · 30 fps` and the visualiser rendered the breathing effect's colour on
-    the real cooler screen. Also checked restarting `armory-crated` while `ttlcd run` is live - it recovers on its
-    own, no restart needed on the ttlcd side.
-- `TTLcdStudio.exe --record <gif> tour [scale]` (`src/gtk/Record.cs`) records the README's `docs/media/ubuntu.gif`
-  in the real window (shown on screen; frames read from X) through the shared `src/Gif.cs`. `Gif.cs` has no WPF:
-  its palette is a median cut unless `GifWriter.Quantiser` is set (the WPF recorder sets WPF's). Run it with
-  `XDG_CONFIG_HOME` on a config copy (the tour changes the mode). It drives the cooler while it runs.
-- `src/LinuxHid.cs`: `Os.Linux`, `Os.Supports(mode)` (Image, Gif, Color, Clock, Aura, Off), hidraw enumeration through
-  `/sys/class/hidraw/*/device/uevent` (HID_ID, HID_PHYS ".../inputN" = interface). hidraw reads return the report
-  without the report-ID byte; `Lcd.ReadCtrl` shifts it. Mono named mutexes are per process only.
-- Engine on Linux: `/proc/stat` CPU load, `/proc/meminfo` RAM, hwmon (k10temp/zenpower/coretemp) CPU temperature;
-  no timeBeginPeriod, game detection or sensor map.
+- `build.sh` builds native binaries and two packages: `ttlcd` (CLI + systemd user service + udev rule; Depends
+  libc6, libgcc-s1, fonts-dejavu-core) and `ttlcd-studio` (self-contained: all of `ttlcd` + `/usr/bin/ttlcd-studio`,
+  desktop entry, icon; Depends GTK 3 / WebKitGTK 4.1 / soup 3 runtime libs, computed from the binary's NEEDED
+  entries; Recommends libayatana-appindicator3-1 for the tray; Provides/Conflicts/Replaces `ttlcd`). The Ubuntu App
+  Center installs one local .deb at a time and failed on a dependency on `ttlcd`; don't reintroduce one. No Mono or
+  GTK# any more (GTK# 3 is gone from Debian/Ubuntu, which is why 1.x had to bundle it).
+- Studio on Linux: only Image, GIF, Colour, Clock, Aura and Off (`model::supports`); no game detection (manual game
+  mode); CPU temperature from hwmon (k10temp/zenpower/coretemp). It stops the `ttlcd` user service while open. Single
+  instance via 127.0.0.1:47913 ("ttlcd show"), same as 1.x.
+- Aura on Linux: `aura::Reader` reads `$XDG_RUNTIME_DIR/armory-crate/virtual/ttlcd.ttas` (same TTAS block as the
+  Windows plugin) published by armory-crated (`~/Armory-crate`, `armory-crate virtual add ttlcd`; spec in its
+  `docs/virtual-devices.md`). Its writer uses a seqlock (odd seq = mid-write); each read opens the file fresh, twice.
+  `aura::linux_service_installed()` greys out the Aura tile until armory-crate is installed (rechecked every 3 s).
+- hidraw: `/sys/class/hidraw/*/device/uevent` (HID_ID, HID_PHYS ".../inputN" = interface); reads return the report
+  without the report-ID byte. The udev rule gives the logged-in user access.
 - CLI: `run` (headless service, reloads config.xml on change), `config`, `set <field> <value>`, `render <jpg> [mode]`.
-- CI `linux` job installs the .deb in a clean `ubuntu:24.04` container, renders frames and screenshots every Studio page.
-  Not yet tested on real hardware or a real desktop under Linux.
+- CI installs the .debs in a clean `ubuntu:24.04` container and renders frames and Studio screenshots under Xvfb.
+  On this machine: CLI, engine (30 fps on the cooler) and Studio screenshots verified; the tray and service handover
+  not yet run on the desktop.
 
 ## GitHub
 
-`.github/workflows/build.yml` runs `build.cmd` on `windows-latest` and uploads the binaries. A `v*` tag also creates
-a release. `.gitignore` keeps `build/`, `tools/`, the RE workspace (except `re/scripts`), dumps and binaries out of the
-repo (except `firmware/*.bin` and `driver/`).
+`.github/workflows/build.yml`: Windows job runs `build.cmd` with the bundled toolchain, smoke-tests `ttlcd.exe`, a
+silent install/uninstall of the setup and Studio screenshots; Linux job builds the .debs, runs unit tests, tests the
+packages in a clean ubuntu:24.04 container and renders Studio pages under Xvfb. A `v*` tag releases the setup,
+portable zip, .debs and tarball. `.gitignore` keeps `build/`, `tools/`, the RE workspace (except
+`extras/re/scripts` and its launchers), dumps and binaries out of the repo (except `firmware/*.bin` and `driver/`).
 
 ## Features status
 
 | Feature | Status |
 |---|---|
-| Live modes | Working on the restored firmware: virtual display / Wallpaper Engine, monitor mirror, image, GIF, video (≤30 s, crop/zoom), colour, clock, Aura, off |
-| UI | Armoury-Crate-style UI: dashboard gauges, round preview with Idle view and rotate, per-reading text styles, drag-and-drop lines, game mode, full screen |
-| CPU temperature | `TTLcdSensors` Windows service (`ttlcd service install`, one time, admin), or the `ttlcd hwmon` console helper. Needs TOWEI installed (its `XYDataCenter.dll`) |
-| Installer | `build\windows\TTLcdStudio-Setup.exe`: per-user install. The uninstaller removes the shared Aura plugin and display driver only on request (`/all`) |
-| Aura plugin (CLSID C0C96C60-30E3-4021-9904-966EC4FA0F0F) | Shows in Armoury Crate as an External device. Shared memory reattach is fixed in the built `TTLcdAura.dll`. **Needs reinstall:** `ttlcd.exe aura uninstall` then `aura install` (admin; restarts LightingService) |
+| Live modes | Rust engine verified on the restored firmware (Clock at 30 fps). Virtual display, monitor mirror, video: Windows only, compile-checked, not yet run on Windows |
+| UI | Same design as 1.x in HTML (WebView2 / WebKitGTK); pages verified by screenshots on Linux; Windows not run yet |
+| CPU temperature | Windows: `TTLcdSensors` service / `ttlcd hwmon` (TOWEI `XYDataCenter.dll`), ported, not run yet. Linux: hwmon |
+| Installer | `TTLcdStudio-Setup.exe` (Rust, Win32 UI, compressed payload); not run yet |
+| Aura plugin (CLSID C0C96C60-30E3-4021-9904-966EC4FA0F0F) | Native DLL (i686 + x64) replaces the .NET one; capability XML byte-identical; `aura install` removes the old mscoree registration. Not run on Windows yet (`examples/probe.rs` self-test) |
 | Virtual display driver | Failed to load at the last boot (WUDFRd 0xC0000365 on ROOT\DISPLAY\0000). Not investigated yet |
-| Idle/loading screens | Protocol known (types 0/1, 10 KB chunks, boot.pak format in `Storage.cs`), but unsafe on this hardware |
+| Idle picture | LX800 only, verified by read-back; refused on the original firmware. Boot animation upload disabled |
+| Cooler queries | On 2026-10-13 the cooler stopped answering queries (serial, coolant) while frames worked, with both 1.x and 2.0; a power cycle is the likely fix |
+
