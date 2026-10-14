@@ -13,6 +13,7 @@
 /extras/re/*
 !/extras/re/scripts/
 !/extras/re/*.cmd
+!/extras/re/*.sh
 
 # flash dumps and logs (the firmware we ship is in firmware/, see the exception below)
 *.bin
