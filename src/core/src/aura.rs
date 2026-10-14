@@ -153,6 +153,13 @@ impl Reader {
 // ---------------- visualiser ----------------
 
 const N: usize = 200;
+/// Feedback buffer ceiling (well into the soft clip): stops the bright core from piling up far past what can be seen.
+const CEIL: f32 = 1600.0;
+/// How far the picture runs ahead of the LEDs' brightness: on the way down it is at (brightness)^this, on the way
+/// up at (brightness)^(1/this), so it fades out and in a little faster than its source (1 = exactly with it).
+const FADE_FOLLOW: f64 = 1.5;
+/// The "full" brightness the LEDs are measured against falls back to a lasting lower level with this half-life (s).
+const PEAK_HALF_LIFE: f64 = 5.0;
 
 /// MilkDrop-style visualiser. Every frame the previous image is warped (zoom, swirl, wavy displacement) and faded,
 /// then a fresh waveform is drawn on top in the Aura colours; the feedback smears each waveform into flowing abstract
@@ -165,6 +172,15 @@ pub struct Visualiser {
     col_warp: [f32; N],
     tone: Vec<u8>,
     last_t: f64,
+    /// the LEDs' recent full brightness (0..1): trails are drawn at it, and the picture is dimmed by how far the
+    /// LEDs are below it right now
+    peak: f64,
+    /// the LEDs' brightness last frame and the picture's brightness from it
+    level: f64,
+    gain: f64,
+    /// last direction the LEDs' brightness moved in; Aura updates them less often than frames are drawn, so a frame
+    /// with the same value keeps it (switching curves on every repeat made the picture flicker)
+    rising: bool,
     sync_base: i64,
     sync_local: f64,
     clock: std::time::Instant,
@@ -179,6 +195,10 @@ impl Default for Visualiser {
             col_warp: [0.0; N],
             tone: (0..4096).map(|i| (255.0 * (1.0 - (-(i as f64) / 160.0).exp())) as u8).collect(), // soft clip
             last_t: f64::NAN,
+            peak: 0.0,
+            level: 0.0,
+            gain: 0.0,
+            rising: true,
             sync_base: -1,
             sync_local: 0.0,
             clock: std::time::Instant::now(),
@@ -279,12 +299,31 @@ impl Visualiser {
         let dt = if self.last_t.is_nan() || t < self.last_t { 1.0 / 30.0 } else { (t - self.last_t).min(0.2) };
         self.last_t = t;
         let step = dt * 30.0; // per-frame amounts below are tuned for 30 fps
+        // Brightness changes of the LEDs (Breathing, Strobing, a darker colour) don't go through the trails, which
+        // would build up and die away late: the trails are drawn at the LEDs' full brightness, and the finished
+        // picture follows the LEDs' brightness at once, a little ahead of it both ways (FADE_FOLLOW).
+        let level = leds.iter().map(|c| c.0.max(c.1).max(c.2)).sum::<f64>() / (255.0 * leds.len().max(1) as f64);
+        self.peak = level.max(self.peak * 0.5f64.powf(dt / PEAK_HALF_LIFE));
+        let rel = if self.peak > 0.0 { (level / self.peak).min(1.0) } else { 0.0 };
+        // the direction comes from the LEDs themselves: `rel` also creeps up as `peak` eases down
+        if (level - self.level).abs() > 1e-3 {
+            self.rising = level > self.level;
+        }
+        self.level = level;
+        self.gain = if self.rising { rel.powf(1.0 / FADE_FOLLOW) } else { rel.powf(FADE_FOLLOW) };
+        let full: Vec<Rgb> = if rel > 0.0 {
+            let k = (1.0 / rel).min(20.0);
+            leds.iter().map(|c| ((c.0 * k).min(255.0), (c.1 * k).min(255.0), (c.2 * k).min(255.0))).collect()
+        } else {
+            leds.to_vec() // all dark: nothing new to draw
+        };
         self.warp(t, step);
-        self.wave(leds, t);
+        self.wave(&full, t);
         let mut low = Pixmap::new(N as u32, N as u32).unwrap();
         for (i, px) in low.pixels_mut().iter_mut().enumerate() {
             let o = i * 3;
-            let c = |v: f32| self.tone[(v as usize).min(4095)];
+            let g = self.gain as f32;
+            let c = |v: f32| (self.tone[(v as usize).min(4095)] as f32 * g) as u8;
             *px = tiny_skia::ColorU8::from_rgba(c(self.fb[o]), c(self.fb[o + 1]), c(self.fb[o + 2]), 255).premultiply();
         }
         let mut out = render::blank(0);
@@ -339,7 +378,8 @@ impl Visualiser {
                 let (i10, i01) = (i00 + 3, i00 + N * 3);
                 let i11 = i01 + 3;
                 for (ch, dch) in [(0, dr), (1, dg), (2, db)] {
-                    dst[o + ch] = (src[i00 + ch] * w00 + src[i10 + ch] * w10 + src[i01 + ch] * w01 + src[i11 + ch] * w11) * dch;
+                    let v = (src[i00 + ch] * w00 + src[i10 + ch] * w10 + src[i01 + ch] * w01 + src[i11 + ch] * w11) * dch;
+                    dst[o + ch] = v.min(CEIL);
                 }
             }
         }
@@ -497,6 +537,70 @@ mod tests {
         let (dark, _) = v.render(Some(&s));
         assert_eq!(brightness(&dark), 0, "nothing drawn while off (empty feedback buffer)");
         assert_eq!(f[0].1, "Aura Sync · Strobing");
+    }
+
+    #[test]
+    fn trails_fade_with_the_source() {
+        let mut v = Visualiser::default();
+        let at = |leds: &[u32], k: i64| Snapshot::parse(&block(k as i32, 1, leds, 2, 1 + k * 33)).unwrap();
+        for k in 0..60 {
+            v.render(Some(&at(&LEDS, k)));
+        }
+        let (lit, _) = v.render(Some(&at(&LEDS, 60)));
+        assert!(brightness(&lit) > 0);
+        let half: Vec<u32> = LEDS.iter().map(|c| (c >> 1) & 0x7F7F7F).collect();
+        let (dim, _) = v.render(Some(&at(&half, 61)));
+        assert!(brightness(&dim) * 10 < brightness(&lit) * 6, "half as bright LEDs: the picture drops at once");
+        let (dark, _) = v.render(Some(&at(&[0; 8], 62)));
+        assert_eq!(brightness(&dark), 0, "LEDs off: no trails left over");
+        let (back, _) = v.render(Some(&at(&LEDS, 63)));
+        assert!(brightness(&back) * 10 > brightness(&lit) * 8, "LEDs on again: the picture is back at once");
+    }
+
+    /// Aura updates the LEDs less often than frames are drawn: Breathing whose colours change only every 3rd frame
+    /// must still fade smoothly, without the picture jumping between frames.
+    #[test]
+    fn no_flicker_between_led_updates() {
+        let mut v = Visualiser::default();
+        let mut seen = vec![];
+        for k in 0..240i64 {
+            let shown = (k / 3) * 3; // the LED colours of the last update
+            let leds: Vec<u32> = {
+                let x = 0.5 - 0.5 * (std::f64::consts::PI * (1 + shown * 33) as f64 / 1000.0).cos();
+                LEDS.iter().map(|c| {
+                    let ch = |s: u32| (((c >> s & 0xFF) as f64 * x) as u32) << s;
+                    ch(0) | ch(8) | ch(16)
+                }).collect()
+            };
+            let (p, _) = v.render(Some(&Snapshot::parse(&block(k as i32, 1, &leds, 2, 1 + k * 33)).unwrap()));
+            seen.push(brightness(&p) as f64);
+        }
+        // after the trails have built up: a frame brighter (or darker) than both its neighbours is a blink; the
+        // picture may step with the LEDs' own steps, but not go back and forth
+        let full = seen.iter().cloned().fold(0.0, f64::max);
+        let worst = seen[90..]
+            .windows(3)
+            .map(|w| ((w[1] - w[0]).min(w[1] - w[2]).max((w[0] - w[1]).min(w[2] - w[1]))).max(0.0) / full)
+            .fold(0.0, f64::max);
+        assert!(worst < 0.03, "a frame blinks by {:.0} % of full brightness", worst * 100.0);
+    }
+
+    /// Breathing, LED brightness against the picture's: `cargo test -p ttlcd-core aura_breathing -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn aura_breathing() {
+        let mut v = Visualiser::default();
+        let (mut out, mut peak) = (vec![], 1u64);
+        for k in 0..150i64 {
+            let t = 1 + k * 33;
+            let (p, _) = v.render(Some(&Snapshot::parse(&block(k as i32, 2, &LEDS, 2, t)).unwrap()));
+            let src = 0.5 - 0.5 * (std::f64::consts::PI * t as f64 / 1000.0).cos();
+            peak = peak.max(brightness(&p));
+            out.push((t, src, brightness(&p)));
+        }
+        for (t, src, b) in out.iter().step_by(4) {
+            println!("t={t:5} leds={src:.2} picture={:.2}", *b as f64 / peak as f64);
+        }
     }
 
     #[test]
