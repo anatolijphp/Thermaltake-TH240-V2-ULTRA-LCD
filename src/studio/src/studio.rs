@@ -50,6 +50,10 @@ pub struct Studio {
     pub out: Vec<String>,
     pub no_save: bool,
     save_at: Option<Instant>,
+    /// state / status changed by settings messages: sent once per event-loop tick (40 ms), not once per message,
+    /// so dragging a slider doesn't rebuild the page 60 times a second
+    dirty_state: bool,
+    dirty_status: bool,
     sel: Option<(ListKind, i32)>,
     drags: [Option<LineDrag>; 2],
     pub page: String,
@@ -109,6 +113,8 @@ impl Studio {
             out: Vec::new(),
             no_save: false,
             save_at: None,
+            dirty_state: false,
+            dirty_status: false,
             sel: None,
             drags: [None, None],
             page: "dashboard".into(),
@@ -218,11 +224,11 @@ impl Studio {
                     "Mode" if self.cfg().Mode == Mode::Video => self.request_thumb(None),
                     _ => {}
                 }
-                self.push_state();
+                self.dirty_state = true;
+                self.dirty_status = true;
                 if k.starts_with("Dash") {
                     self.push_dash();
                 }
-                self.push_status();
             }
             "style" => {
                 let Some((kind, id)) = self.sel else { return };
@@ -242,7 +248,7 @@ impl Studio {
                         c.set_style(kind.overlay(), st);
                     }
                 });
-                self.push_state();
+                self.dirty_state = true;
             }
             "rot" => {
                 let user = msg["v"].as_i64().unwrap_or(0) as i32;
@@ -355,6 +361,16 @@ impl Studio {
 
     // ================= periodic work (from the event loop) =================
     /// Live preview: tells the page about a new frame (~25 times a second while the window is shown).
+    /// Sends the state and status that settings messages marked as changed (once per tick).
+    pub fn flush_dirty(&mut self) {
+        if std::mem::take(&mut self.dirty_state) {
+            self.push_state();
+        }
+        if std::mem::take(&mut self.dirty_status) {
+            self.push_status();
+        }
+    }
+
     pub fn tick_frame(&mut self) {
         if !self.visible || !self.ready {
             return;

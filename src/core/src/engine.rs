@@ -83,6 +83,7 @@ struct Shared {
     latest: Mutex<Option<Arc<Frame>>>,
     new_frame: Event,
     game_wake: Event,
+    ctrl_wake: Event,
     seq: AtomicU64,
     texts: Mutex<Texts>,
     fps: AtomicU64,            // f64 bits: frames actually sent per second
@@ -143,6 +144,7 @@ impl Engine {
             latest: Mutex::new(None),
             new_frame: Event::default(),
             game_wake: Event::default(),
+            ctrl_wake: Event::default(),
             seq: AtomicU64::new(0),
             texts: Mutex::new(Texts { render_status: "Starting".into(), device_status: "Connecting...".into(), ..Default::default() }),
             fps: AtomicU64::new(0f64.to_bits()),
@@ -165,6 +167,7 @@ impl Engine {
     pub fn set_config(&self, c: Config) {
         *self.0.cfg.write().unwrap() = Arc::new(c);
         self.0.new_frame.set();
+        self.0.ctrl_wake.set();
     }
     pub fn paused(&self) -> bool {
         self.0.paused.load(SeqCst)
@@ -247,6 +250,7 @@ impl Engine {
     /// Runs once the cooler is connected; live frames pause while it runs.
     pub fn enqueue(&self, job: DeviceJob) {
         self.0.jobs.lock().unwrap().push_back(job);
+        self.0.ctrl_wake.set();
     }
 
     fn quit(&self) -> bool {
@@ -620,14 +624,22 @@ impl Engine {
         let _ = thread::Builder::new().name("lcd-control".into()).spawn(move || {
             let (mut sent, mut sleep_sent) = (-1, -1);
             let mut got_serial = false;
-            // Config.Rotation as of reading the cooler's stored rotation this connection. Only a later CHANGE to
-            // Rotation pushes a write: finding that the stored value disagrees with our calibration must not (it was
-            // very likely changed on purpose: ttlcd rotate, a previous session, a remount).
-            let mut rotation_at_connect = i32::MIN;
-            let mut last_temp: Option<Instant> = None;
+            // Config.Rotation when this connection started. Only a later CHANGE to Rotation writes the cooler's
+            // stored rotation: finding that the stored value disagrees with our calibration must not (it was very
+            // likely changed on purpose: ttlcd rotate, a previous session, a remount).
+            let rotation_at_connect = e.config().Rotation;
+            let mut rotation_written = rotation_at_connect;
+            // Queries can go unanswered for a long time (the cooler sometimes stops answering them while frames
+            // still work, CLAUDE.md). Each try waits up to 1 s with the control interface busy, so a failed query
+            // is retried later, never on every loop: settings like brightness must not wait behind timeouts.
+            let mut next_serial = Instant::now();
+            let mut next_rot_query = Instant::now();
+            let mut next_temp = Instant::now();
+            let mut temp_fails = 0u32;
             while !e.quit() && e.0.session.load(SeqCst) == session {
                 let c = e.config();
                 let r = (|| -> io::Result<()> {
+                    // settings first: they are what the user is waiting to see
                     if c.Brightness != sent {
                         lcd.set_brightness(c.Brightness.clamp(0, 100) as u8)?;
                         sent = c.Brightness;
@@ -637,38 +649,51 @@ impl Engine {
                         lcd.set_sleep(c.DeviceSleep)?;
                         sleep_sent = want_sleep;
                     }
-                    // queries time out while the cooler is still waking up; keep trying instead of giving up
-                    if !got_serial {
-                        if let Ok(s) = lcd.serial() {
-                            e.0.texts.lock().unwrap().serial = s;
-                            got_serial = true;
-                        }
-                    }
-                    if e.hw_rotation() < 0 {
-                        if let Ok(r) = lcd.rotation() {
-                            e.0.hw_rotation.store(r as i32, SeqCst);
-                            rotation_at_connect = c.Rotation;
-                        }
-                    }
+                    // the cooler's stored rotation turns its own idle and boot screens (streamed frames are turned
+                    // in software). Written when Rotation changes, also while the cooler isn't answering the
+                    // rotation query (then the calibration in the settings is all we know).
                     let hw = hw_for(&c);
-                    // flash write: only when Rotation changed since we connected, not merely on mismatch
-                    if hw >= 0 && e.hw_rotation() >= 0 && c.Rotation != rotation_at_connect && hw != e.hw_rotation() {
+                    if hw >= 0 && c.Rotation != rotation_written && hw != e.hw_rotation() {
                         lcd.set_rotation(hw)?;
                         e.0.hw_rotation.store(hw, SeqCst);
-                        rotation_at_connect = c.Rotation;
                     }
-                    // water temperature every 2 s, or at the game-mode interval while a game runs
-                    let every = if e.gaming() { c.GameSensorMs.max(2000) } else { 2000 } as u64;
-                    if last_temp.is_none_or(|t| t.elapsed() >= Duration::from_millis(every)) {
-                        if let Ok(t) = lcd.coolant_c() {
-                            e.0.coolant.store((t * 100.0).round() as i32, SeqCst);
-                            let now = crate::util::now_ms();
-                            let at = e.0.coolant_at.swap(now, SeqCst);
-                            if at >= 0 {
-                                e.0.coolant_period.store((now - at) as i32, SeqCst);
+                    if c.Rotation != rotation_written {
+                        rotation_written = c.Rotation;
+                    }
+                    let now = Instant::now();
+                    if !got_serial && now >= next_serial {
+                        match lcd.serial() {
+                            Ok(s) => {
+                                e.0.texts.lock().unwrap().serial = s;
+                                got_serial = true;
                             }
+                            Err(_) => next_serial = now + Duration::from_secs(5),
                         }
-                        last_temp = Some(Instant::now());
+                    }
+                    if e.hw_rotation() < 0 && now >= next_rot_query {
+                        match lcd.rotation() {
+                            Ok(r) => e.0.hw_rotation.store(r as i32, SeqCst),
+                            Err(_) => next_rot_query = Instant::now() + Duration::from_secs(5),
+                        }
+                    }
+                    // water temperature every 2 s, or at the game-mode interval while a game runs; every 10 s
+                    // while the cooler doesn't answer
+                    if Instant::now() >= next_temp {
+                        let every = if e.gaming() { c.GameSensorMs.max(2000) } else { 2000 } as u64;
+                        match lcd.coolant_c() {
+                            Ok(t) => {
+                                temp_fails = 0;
+                                e.0.coolant.store((t * 100.0).round() as i32, SeqCst);
+                                let now = crate::util::now_ms();
+                                let at = e.0.coolant_at.swap(now, SeqCst);
+                                if at >= 0 {
+                                    e.0.coolant_period.store((now - at) as i32, SeqCst);
+                                }
+                            }
+                            Err(_) => temp_fails += 1,
+                        }
+                        let wait = if temp_fails >= 3 { every.max(10_000) } else { every };
+                        next_temp = Instant::now() + Duration::from_millis(wait);
                     }
                     Ok(())
                 })();
@@ -679,7 +704,7 @@ impl Engine {
                 if let Some(job) = job {
                     e.run_job(&lcd, job);
                 }
-                thread::sleep(Duration::from_millis(100));
+                e.0.ctrl_wake.wait(Duration::from_millis(100)); // a settings change wakes it at once
             }
         });
     }

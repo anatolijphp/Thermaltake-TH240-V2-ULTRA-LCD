@@ -252,6 +252,7 @@ fn main() -> wry::Result<()> {
                 }
             }
             Event::NewEvents(_) => {
+                st.flush_dirty();
                 st.tick_frame();
                 st.tick_save(now);
                 if now >= next_status {

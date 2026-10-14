@@ -122,7 +122,7 @@ class Slider {
       this.fromX(e.clientX);
     });
     el.addEventListener('pointermove', (e) => { if (this.dragging) this.fromX(e.clientX); });
-    const end = () => { this.dragging = false; };
+    const end = () => { this.dragging = false; this.flush(); };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
     el.addEventListener('lostpointercapture', end);
@@ -144,9 +144,20 @@ class Slider {
     if (v === this.value) return;
     this.value = v;
     this.draw();
-    if (this.onInput) this.onInput(v);
+    // the knob follows at once; the app gets the value at most every 60 ms while dragging (it re-renders the
+    // cooler frame per value), the last one always
+    this.pending = true;
+    if (!this.timer) {
+      this.flush();
+      this.timer = setTimeout(() => { this.timer = null; this.flush(); }, 60);
+    }
   }
-  set(v) { if (this.dragging) return; this.value = this.snap(v); this.draw(); }
+  flush() {
+    if (!this.pending) return;
+    this.pending = false;
+    if (this.onInput) this.onInput(this.value);
+  }
+  set(v) { if (this.dragging || this.timer) return; this.value = this.snap(v); this.draw(); } // no jump back to a stale value
   setRange(min, max) { this.min = min; this.max = Math.max(min, max); this.value = this.snap(this.value); this.draw(); }
   draw() {
     const f = this.max > this.min ? (this.value - this.min) / (this.max - this.min) : 0;
@@ -270,12 +281,17 @@ function layoutTiles() {
 }
 
 // ---------------- reading lines (drag and drop) ----------------
+const linesKey = {};
 function buildLines(kind) {
   const host = kind === 'Clock' ? $('ClkItems') : $('OvItems');
   const L = S.lists[kind];
   const d = drags[kind];
   const lines = d ? d.display : L.lines;
   const sel = S.sel && S.sel.list === kind ? S.sel.id : null;
+  // state updates arrive often (sliders); rebuild only when something this list shows changed
+  const key = JSON.stringify([lines, L.on, sel, d ? [d.id, d.new_row_idx] : null]);
+  if (linesKey[kind] === key) return;
+  linesKey[kind] = key;
   host.innerHTML = '';
   lines.forEach((line, i) => {
     const row = document.createElement('div');
@@ -719,7 +735,12 @@ function init() {
   $('startupSwitch').addEventListener('click', (e) => { e.preventDefault(); const v = !$('startupSwitch').classList.contains('on'); $('startupSwitch').classList.toggle('on', v); send({ t: 'autostart', v }); });
   $('gmForce').addEventListener('click', (e) => { e.preventDefault(); send({ t: 'game', v: !$('gmForce').classList.contains('on') }); });
   $('gameBtn').addEventListener('click', () => send({ t: 'game', v: !$('gameBtn').classList.contains('on') }));
-  $('pvIdle').addEventListener('click', (e) => { e.preventDefault(); send({ t: 'idle', a: 'view', v: !idleView }); });
+  $('pvIdle').addEventListener('click', (e) => {
+    e.preventDefault();
+    idleView = !idleView;
+    $('pvIdle').classList.toggle('on', idleView); // at once; the app's reply fills the rest of the view
+    send({ t: 'idle', a: 'view', v: idleView });
+  });
 
   // text fields
   $$('[data-text]').forEach((el) => el.addEventListener('change', () => send({ t: 'set', k: el.dataset.text, v: el.value.trim() })));
