@@ -97,6 +97,7 @@ CI (`.github/workflows/build.yml`). Name the date and the issue in the test's do
 | `linux/` | Debian packaging: control files, udev rule, systemd user unit, desktop entry, icon |
 | `driver/` | Bundled MttVDD IddCx virtual 480×480 monitor (for Wallpaper Engine) |
 | `firmware/` | Shipped LCD firmware, base image, Nuvoton `FA93_musb.bin` helper, pin photo, `README.md` burn guide |
+| `firmware/re-src/` | The shipped firmware decompiled by Ghidra (`code/*.c`, `functions.csv`, `strings.txt`), names in `names.txt`; regenerate with `extras/re/decompile-fw.sh` (Linux; Ghidra + `tools/jdk21-linux`) |
 | `extras/rescue/` | C# `Rescue.cs` (ttrescue: recovery-mode read/write/verify via SCSI pass-through), `PatchPanel.cs` |
 | `extras/re/` | Ghidra projects (`proj`), scripts (`scripts/*.java`), launchers (`run.cmd`, `runtw.cmd`, `runlx.cmd`), outputs (`out`) |
 | `extras/tools-src/` | Icon generator |

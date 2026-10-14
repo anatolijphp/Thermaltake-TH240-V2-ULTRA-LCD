@@ -1,0 +1,35 @@
+# address  file-offset  text   (defined strings in firmware/lx800_tt021panel.bin)
+00101fc4  0x01fe4  system divider = %d\n
+00101fdc  0x01ffc  Jump to SRAM\n
+001040ac  0x040cc  u32DbgMessage = 0x%x\n
+001051c4  0x051e4  Library Pen up\n
+0010c0e0  0x0c100  LCM_Init test !!\n
+0010c5ec  0x0c60c  2222222222222222222222222222222222222\n
+0010d32c  0x0d34c  SIGRTMEM: Out of heap memory
+0010d34c  0x0d36c  : Heap memory corrupted
+0010d540  0x0d560  Request VDMA fail.\n
+0010ee94  0x0eeb4  SEGGER emWin V5481110
+001273d4  0x273f4  lcd_boot_proc reboot\n
+001273f4  0x27414  lcd_boot_proc exit\n
+00127cc0  0x27ce0  Shenzhen Xinyao Technology Co., Ltd.
+00127ea0  0x27ec0  load eeprom faild\n
+00127eb4  0x27ed4  A247392SS000000
+00127ecc  0x27eec  load config ok\n
+00127edc  0x27efc  load config faild\n
+00127f70  0x27f90  c:\syst\boot
+00127f80  0x27fa0  c:\syst\wapper.jpg
+00128954  0x28974  ----->uid:%08x%08x\n
+00129b40  0x29b60  ======>sn: %s, %02x %02x %02x %02x\n
+00129f30  0x29f50  ---->receiving cmd error %02x %02x\n
+0012a03c  0x2a05c  ---->receiving data error %02x %02x\n
+0012a248  0x2a268  -----> no enough space0:%08x %d %d %d\n
+0012a270  0x2a290  -----> no enough space1:%08x %d %d %d\n
+0012adec  0x2ae0c  SPI flash id [0x%x]\n
+0012ae08  0x2ae28  read id error !! [0x%x]\n
+0012c388  0x2c3a8  lcd_boot_proc restart--- \n
+0012c7f0  0x2c810  20180315
+0012c7fc  0x2c81c  N9H20 UDC Library (%s)\n
+0012cd88  0x2cda8  USBR_GET_DESCRIPTOR pkt.wLength = %d\n
+0012dd68  0x2dd88  Unplug(S)!!\n
+0012ea18  0x2ea38  watch_dog_isr \n
+001688db  0x688fb  fffffffffffffffffffffQ

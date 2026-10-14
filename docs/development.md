@@ -115,6 +115,7 @@ ttlcd/
 ├── linux/                  Debian packaging: control files, udev rule, systemd user unit, desktop entry, icon
 ├── driver/                 Bundled MttVDD virtual 480×480 display driver (signed, MIT)
 ├── firmware/               LCD controller firmware, Nuvoton helper, pin photo and the burn guide
+│   └── re-src/               That firmware decompiled (Ghidra): code/*.c, functions, strings, names
 ├── docs/                   These pages, protocol notes and media
 ├── .github/workflows/      CI: Windows and Linux builds, tests, releases
 │
@@ -184,6 +185,9 @@ changes it, and the page changes it with `setCfg('<Name>', value)`.
 **A part of the UI.** Each component is a folder with `Name.jsx` + `Name.scss` under `src/studio/ui/src/`, using the
 shared tokens from `styles/_tokens.scss`. The page reads the app's state with `useStore` and sends messages with
 `send` (`bridge.js`); `src/studio/src/studio.rs` handles them and pushes state back.
+
+**Firmware.** The firmware the cooler runs is decompiled in [`firmware/re-src/`](../firmware/re-src/README.md)
+(regenerate with `extras/re/decompile-fw.sh`; add what you learn to its `names.txt`).
 
 **Protocol work.** The command list and the firmware's config record are in [protocol notes](protocol.md); read the
 warnings there and in the [introduction](../README.md#warnings) before sending anything new to the cooler.

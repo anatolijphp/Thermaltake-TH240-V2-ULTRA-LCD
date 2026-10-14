@@ -1,0 +1,53 @@
+# Names for firmware/lx800_tt021panel.bin (loaded at 0xFFFE0), applied by extras/re/scripts/DecompileFirmware.java.
+# One per line: <address> <name> [# where the name comes from]. A function there gets the name, anything else a
+# label. "?" in the comment marks a likely but unproven guess.
+
+# start-up and system
+0x00100000 reset                         # the image's entry (file offset 0x20)
+0x00101cb8 sys_set_clock_divider         # prints "system divider = %d", "Jump to SRAM"
+0x00103d24 dbg_printf                    # every debug format string goes through it
+0x0010bd00 lcm_init                      # refs "LCM_Init test !!"; the panel init PatchPanel replaces
+0x0010cd94 divide                        # called as divide(value, 1000) / (value, 100); result in r0 ?
+0x0010c6cc sprintf                       # sprintf(buffer, "%d", value) in idle_screen_proc
+0x0010c614 mem_alloc                     # ? returns the buffer a file is read into; freed by mem_free
+0x0010c680 mem_free                      # ?
+
+# the cooler's settings record (0x114 bytes, docs/protocol.md "Config record")
+0x00127d00 config_load                   # refs "load config ok"; loads the record from the flash store at boot
+0x00127efc config_defaults               # fills the record: brightness 100, "c:\syst\boot", "c:\syst\wapper.jpg"
+0x00127f94 config_save                   # writes the 0x114-byte record back to the store
+0x00126de0 store_read                    # ? called by config_load to read the record
+0x00126ee0 store_write                   # ? config_save's write (buffer, 0x114)
+0x007bc9a8 g_config                      # the settings record in RAM: +0xF8 text colour, +0xFC/+0x100 idle text x/y, +0x110 °C/°F
+
+# USB commands (docs/protocol.md)
+0x001274cc usb_command                   # the command switch: 0x16 colour, 0x0A/0x0B uploads, 0x85 serial, ...
+0x00129b64 usb_receive_task              # ? calls usb_receive_cmd
+0x00129e44 usb_receive_cmd               # refs "---->receiving cmd error %02x %02x"
+0x0012a064 usb_receive_data              # refs "-----> no enough space0:..." (file upload data)
+
+# screens
+0x00126fac lcd_boot_proc                 # refs "lcd_boot_proc reboot"; boot screen / animation
+0x0012c2f8 lcd_boot_restart              # refs "lcd_boot_proc restart---"
+0x00112c90 display_set_rotation          # applied at boot with table[config[1] & 3]
+0x0012808c idle_screen_proc              # the idle screen: picture + coolant temperature (message 0x15 draws it)
+0x00128608 screen_create_proc            # ? message 3 creates the 480x480 surface (stored at g_screen)
+0x001289fc file_size                     # ? file_size(path): idle_screen_proc sizes the idle picture's buffer with it
+0x00128ad4 file_read                     # ? file_read(path, 0, buffer, size) > 0 when read
+0x0010ef94 jpeg_size                     # ? jpeg_size(jpeg, length, &width_height): centres the idle picture with it
+0x0010eeb8 jpeg_draw                     # ? jpeg_draw(jpeg, length, x, y)
+0x00182430 g_coolant                     # coolant temperature in 1/100 °C (shown as /100, or *18/1000 + 32 in °F)
+0x00182bb0 g_screen                      # the 480x480 drawing surface handle
+
+# text drawing (as idle_screen_proc uses it)
+0x0010ea00 text_draw                     # text_draw(str, x, y) with the selected font and colour
+0x0010ec30 text_width                    # text_width(str) in pixels with the selected font
+0x00112c24 font_select                   # font_select(font handle)
+0x00112c0c text_set_colour               # colour from config +0xF8 (byte-swapped, top byte inverted)
+0x00182bd0 g_idle_fonts                  # [0] small font (60 px cells), [1] big font (100 px cells)
+
+# the two bitmap fonts (src/core/src/idle_text.rs; glyph entries {width, advance, bytes per row, 0, bitmap})
+0x0016a440 font_big_glyphs               # 100 px cells, ASCII 0x20-0x7E, then °, ℃, ℉, Ω
+0x0016a758 font_big_ranges               # range list: {first, last, glyph table, next}
+0x0017fe9c font_small_glyphs             # 60 px cells, same characters
+0x001801b4 font_small_ranges             # range list
