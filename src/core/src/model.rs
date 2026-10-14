@@ -8,7 +8,7 @@ use serde::Serialize;
 
 /// Modes this system can show. Linux has no screen capture, virtual display or video decoder.
 pub fn supports(m: Mode) -> bool {
-    cfg!(windows) || matches!(m, Mode::Image | Mode::Gif | Mode::Color | Mode::Clock | Mode::Aura | Mode::Off)
+    cfg!(windows) || matches!(m, Mode::Image | Mode::Gif | Mode::Color | Mode::Clock | Mode::Aura | Mode::Pump | Mode::Off)
 }
 
 // ---- modes ----
@@ -25,6 +25,7 @@ pub fn mode_description(m: Mode) -> String {
         Mode::Aura if linux && !crate::aura::linux_service_installed() => "Needs armory-crate, the Linux Aura Sync service, which isn't installed. Install it (./packaging/install.sh in its folder), then run: systemctl --user enable --now armory-crated and armory-crate virtual add ttlcd. This mode turns on by itself once it's there.".into(),
         Mode::Aura if linux => "Follows Aura Sync from armory-crate: its effect and colours drive an abstract visualiser on the LCD. Add the screen there once with: armory-crate virtual add ttlcd".into(),
         Mode::Aura => "Adds the cooler screen to Armoury Crate as an Aura Sync device (\"TT LCD CL-W383\"). Its effects and colours drive an abstract visualiser on the LCD. Installing needs administrator rights and restarts the ASUS lighting service.".into(),
+        Mode::Pump => "A look inside the pump: the impeller spins in the coolant at the pump's speed and pushes the water round from the inlet to the outlet, lit by the LEDs around the pump head (red, or the colours from Aura Sync).".into(),
         Mode::Off => "The screen is blanked.".into(),
     }
 }
@@ -47,6 +48,7 @@ pub fn panels(cfg: &Config, selected_visible: bool) -> Vec<(&'static str, bool)>
         ("OptVideo", m == Mode::Video),
         ("OptOff", m == Mode::Off),
         ("OptAura", m == Mode::Aura),
+        ("OptPump", m == Mode::Pump),
         ("OptClock", m == Mode::Clock),
         ("OptScaling", matches!(m, Mode::Image | Mode::Gif | Mode::Monitor)),
         ("OptBg", matches!(m, Mode::Image | Mode::Gif | Mode::Color | Mode::Clock)),

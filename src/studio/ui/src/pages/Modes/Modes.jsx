@@ -76,6 +76,25 @@ export default function Modes() {
             <Button disabled={!S.aura.installed || S.aura.busy} onClick={() => send({ t: 'cli', args: 'aura uninstall', what: 'aura' })}>Uninstall</Button>
           </div>
         )}
+        {P.OptPump && (
+          <div>
+            <Row kind="2" label="Speed from">
+              <Combo items={[{ v: '', label: 'CPU fan (automatic)' }, ...(S.fans || []).map((f) => ({ v: f.id, label: f.label })), { v: 'manual', label: 'Set by hand' }]}
+                value={c.PumpFan} onPick={(v) => setCfg('PumpFan', v)} />
+            </Row>
+            {ST && ST.pump && (
+              <p className="note pump-now">{ST.pump.source ? `Now ${ST.pump.rpm} rpm from ${ST.pump.source}.`
+                : ST.pump.fans ? 'Set by hand.' : 'This system reports no fan speeds here, so the speed is set by hand.'}</p>
+            )}
+            {(c.PumpFan === 'manual' || (ST && ST.pump && !ST.pump.source)) && (
+              <Row label="Pump rpm"><Slider value={c.PumpRpm} min={0} max={4000} step={50} onInput={(v) => setCfg('PumpRpm', v)} /></Row>
+            )}
+            <Row kind="2" label="Coolant"><Swatches palette={S.palette} value={c.PumpColor} onPick={(v) => setCfg('PumpColor', v)} /></Row>
+            <Row kind="2" label="Light">
+              <Switch on={c.PumpAura} onChange={(v) => setCfg('PumpAura', v)}>From Aura Sync (otherwise red)</Switch>
+            </Row>
+          </div>
+        )}
         {P.OptClock && (
           <div>
             <div className="hair" />

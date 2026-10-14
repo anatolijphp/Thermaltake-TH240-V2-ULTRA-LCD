@@ -6,6 +6,7 @@
 
 - [Pick a mode, see it live](#pick-a-mode-see-it-live)
 - [Style every reading](#style-every-reading)
+- [Pump](#pump)
 - [Game mode](#game-mode)
 - [Idle picture](#idle-picture)
 
@@ -28,6 +29,21 @@ or above, °C/°F and colour-by-value. Everything is kept inside the round scree
 it; click it again to close its style.
 
 <img src="media/style.gif" alt="Aura Sync mode: switching on the time overlay, making it bigger and giving it a neon glow" width="860">
+
+## Pump
+
+The screen becomes a window into the pump: a dark metal impeller spinning in the coolant, the water coming in at the
+top left, going round and out at the top right, carrying bubbles and specks (a few drift on their own). The LEDs
+around the pump head (left, bottom and right) light the water and catch the blade edges.
+
+- **Speed from:** the impeller turns at the speed of a motherboard fan header: the **CPU fan** unless you pick
+  another one (the header your pump is on), or **set by hand**. The options show the speed it uses now. Fan speeds
+  are read on Linux (the kernel's hwmon sensors); on Windows the speed is set by hand for now.
+- **Coolant:** the colour of the water.
+- **Light:** constant red with a gentle flicker, or **from Aura Sync**: the light then takes the colours and effect
+  of the Aura LEDs (Breathing, Rainbow, ...), spread along the three lit sides.
+
+At speed the blades blur like a camera sees them; stopped, you see every blade.
 
 ## Game mode
 

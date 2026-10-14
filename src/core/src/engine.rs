@@ -121,6 +121,7 @@ pub fn label(m: Mode) -> &'static str {
         Mode::Color => "Colour",
         Mode::Clock => "Clock",
         Mode::Aura => "Aura Sync",
+        Mode::Pump => "Pump",
         Mode::Off => "Off",
     }
 }
@@ -519,6 +520,31 @@ impl Engine {
                 readings::draw_clock(&mut b, c, &self.values());
                 Produced { frame: b, delay: stream_delay, note: None, direct: None }
             }
+            Mode::Pump => {
+                // real time between frames, so the turn speed doesn't depend on the frame rate
+                let now = std::time::Instant::now();
+                let dt = st.pump_at.map_or(1.0 / 30.0, |t| now.duration_since(t).as_secs_f32());
+                st.pump_at = Some(now);
+                // the LEDs round the pump head: Aura Sync's colours when chosen and available, else a flickering red
+                let aura = if c.PumpAura { st.aura.read() } else { None };
+                let (lights, light) = match &aura {
+                    Some(s) => (st.vis.lights(s, render::pump::LIGHTS), "Aura Sync light"),
+                    None if c.PumpAura => (st.pump.red_lights(), "red light (waiting for Aura Sync)"),
+                    None => (st.pump.red_lights(), "red light"),
+                };
+                // the speed: the chosen motherboard fan (the CPU fan by default), read about once a second; the set
+                // speed when chosen or when the system reports no fans
+                if st.pump_fan.as_ref().is_none_or(|(at, _)| now.duration_since(*at).as_millis() >= 1000) {
+                    let fans = crate::sensors::fans();
+                    st.pump_fan = Some((now, crate::sensors::pump_source(&c.PumpFan, &fans).map(|f| (f.rpm, f.label.clone()))));
+                }
+                let (rpm, source) = match st.pump_fan.as_ref().and_then(|(_, f)| f.clone()) {
+                    Some((rpm, label)) => (rpm as f32, label),
+                    None => (c.PumpRpm as f32, "set".to_string()),
+                };
+                let frame = st.pump.render(rpm, dt, c.PumpColor, &lights);
+                Produced { frame, delay: stream_delay, note: Some(format!("Pump · {rpm:.0} rpm ({source}) · {light}")), direct: None }
+            }
             Mode::Color => Produced { frame: render::blank(c.ColorRgb), delay: stream_delay, note: None, direct: None },
             Mode::Off => Produced { frame: render::blank(0), delay: 100, note: None, direct: None },
         }
@@ -792,6 +818,10 @@ struct RenderState {
     video_idx: usize,
     aura: aura::Reader,
     vis: aura::Visualiser,
+    pump: render::pump::Pump,
+    pump_at: Option<std::time::Instant>,
+    /// the pump speed read from a fan: (when, rpm, which fan), refreshed about once a second
+    pump_fan: Option<(std::time::Instant, Option<(u32, String)>)>,
 }
 
 impl RenderState {

@@ -42,7 +42,7 @@ system's GTK 3 and WebKitGTK 4.1 (part of any current Ubuntu desktop, 22.04 to 2
 
 - **Everything Linux can do, in the window:**
   - dashboard
-  - Image, GIF, Colour, Clock, Aura Sync and Off modes with the overlay
+  - Image, GIF, Colour, Clock, Aura Sync, Pump and Off modes with the overlay
   - drag-and-drop lines and per-reading styles
   - device and streaming settings
   - the idle picture

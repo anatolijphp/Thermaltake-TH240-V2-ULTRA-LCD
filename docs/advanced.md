@@ -59,7 +59,8 @@ Studio, `ttlcd run` and the Linux service share one settings file, `config.xml`:
 `ttlcd config` prints every setting and `ttlcd set <name> <value>` changes one, for example:
 
 ```
-ttlcd set Mode Clock          # VirtualDisplay, Monitor, Image, Gif, Video, Color, Clock, Aura, Off
+ttlcd set Mode Clock          # VirtualDisplay, Monitor, Image, Gif, Video, Color, Clock, Aura, Pump, Off
+ttlcd set PumpFan nct6799/fan7   # Pump mode speed: "" = CPU fan, a motherboard fan, or manual (PumpRpm)
 ttlcd set ImagePath ~/Pictures/photo.jpg
 ttlcd set GifPath ~/Pictures/loop.gif
 ```

@@ -22,7 +22,8 @@ engineering the cooler's USB protocol.
 
 |  |  |
 |---|---|
-| 🖥️ **Nine display modes** | Wallpaper Engine (via a bundled 480×480 virtual monitor), screen mirror, image, GIF, video, colour, clock, Aura Sync, off |
+| 🖥️ **Ten display modes** | Wallpaper Engine (via a bundled 480×480 virtual monitor), screen mirror, image, GIF, video, colour, clock, Aura Sync, pump, off |
+| 💧 **Pump** | A window into the pump: the impeller spins at your pump's real speed, lit by the LEDs (red or Aura Sync) |
 | 🕒 **Clock and sensor face** | Time, date, coolant temperature from the cooler's own sensor, CPU temperature and load. Drag readings into lines, style each one |
 | 🌈 **Aura Sync** | Shows up in ASUS Armoury Crate as a device; its effects drive a MilkDrop-style visualiser on the LCD |
 | 📊 **Dashboard** | Live gauges for coolant, CPU temperature, CPU load and RAM |

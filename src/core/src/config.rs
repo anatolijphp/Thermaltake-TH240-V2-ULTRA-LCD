@@ -26,7 +26,7 @@ macro_rules! enum_str {
     };
 }
 
-enum_str!(Mode { VirtualDisplay, Monitor, Image, Gif, Video, Color, Clock, Aura, Off });
+enum_str!(Mode { VirtualDisplay, Monitor, Image, Gif, Video, Color, Clock, Aura, Pump, Off });
 enum_str!(Overlay { None, Clock, ClockCpu });
 enum_str!(TextEffect { None, Shadow, Outline, Glow });
 // What to do while a game runs: nothing, lower the frame rate, or stop streaming so the cooler shows its idle screen.
@@ -285,6 +285,14 @@ config! {
     FitContain: bool = false,
     /// background for Color/Clock modes
     ColorRgb: i32 = 0x000000,
+    /// Pump mode: where its speed comes from: "" = the CPU fan, a motherboard fan's id ("nct6799/fan7"), or
+    /// "manual" = PumpRpm
+    PumpFan: String = "",
+    /// Pump mode: the speed when set by hand (or no fan readings), rpm; and the coolant's colour
+    PumpRpm: i32 = 2800,
+    PumpColor: i32 = 0x00D1FF,
+    /// Pump mode: the LED light round the pump head follows Aura Sync (else a flickering red)
+    PumpAura: bool = false,
     TextRgb: i32 = 0xFFFFFF,
     /// legacy; replaced by the Overlay* flags below
     Overlay: Overlay = Overlay::None,

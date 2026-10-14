@@ -21,6 +21,8 @@ const ICONS = {
   video: <><rect x="2" y="6" width="13" height="12" rx="2" /><path d="M15 10.5l6-3.5v10l-6-3.5" /></>,
   palette: <><path d="M12 3a9 9 0 1 0 0 18c.9 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.8.7-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4.3-4-7.8-9-7.8z" /><circle cx="7.5" cy="11.5" r="1.1" {...F} /><circle cx="10" cy="7.3" r="1.1" {...F} /><circle cx="14.6" cy="7.3" r="1.1" {...F} /></>,
   clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.2 2" /></>,
+  // an impeller: hub and four swept blades in a round case
+  pump: <><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="2.2" /><path d="M12 9.8c0-3 1.6-5 4.2-5.6M14.2 12c3 0 5 1.6 5.6 4.2M12 14.2c0 3-1.6 5-4.2 5.6M9.8 12c-3 0-5-1.6-5.6-4.2" /></>,
   aura: <path {...F} d="M 12,1 L 23,22 L 18.5,22 L 12,9.5 L 5.5,22 L 1,22 Z M 12,13 L 15.6,20 L 8.4,20 Z" />,
   thermo: <><path d="M14 14.8V4.5a2 2 0 0 0-4 0v10.3a4 4 0 1 0 4 0z" /><path d="M12 9v7.5" /></>,
   cpu: <><rect x="5.5" y="5.5" width="13" height="13" rx="1.5" /><rect x="9" y="9" width="6" height="6" /><path d="M9.5 2.5v3M14.5 2.5v3M9.5 18.5v3M14.5 18.5v3M2.5 9.5h3M2.5 14.5h3M18.5 9.5h3M18.5 14.5h3" /></>,

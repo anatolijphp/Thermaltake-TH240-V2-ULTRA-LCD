@@ -161,6 +161,23 @@ stopping the `ttlcd hwmon` helper, so the helper wasn't the cause. `ttlcd temp` 
   firmware by a test) and layout (number cell at y 100, small "°" at y 103, centred; reading truncated; #CCCCCC).
   The pre-idle frame (`idle::lcd_frame`) and Studio's Idle preview (`/idletemp/<n>.png` overlay) both use it.
 
+## Pump mode
+
+`render/pump.rs`: a look inside the pump head (the LCD is the window: no case, fittings or glass drawn; the real
+case and glass are around it). Dark metal impeller turning anticlockwise; water in at the top left, round the
+chamber, out at the top right. Cached layers (machined floor with volute, the impeller disc with a brushed highlight
+fixed to the light, impeller sprite, blade-edge mask, shadow, water swirl) plus per frame: particles (Flow from inlet
+to outlet, Caught in the impeller then thrown out, Wander on their own; lit by the LEDs), the impeller
+motion-blurred by doubling (2^k evenly spaced copies in k passes), the LED light. Rule: the turning sprites (blades,
+hub) hold only what looks the same at any turn; every directional light or shadow (room light on the blades, the
+hub's shadow and shine, the LED shimmer) is applied fixed on screen each frame (`nothing_that_turns_carries_light_or_shadow`). The LEDs ring the pump head on the
+left, bottom and right (`LIGHTS` points along that arc): a soft light map (drawn at 120 px, scaled up) glows into
+the water and colours the blade-edge mask before the blur. Light = Aura Sync's LED colours with the effect applied
+(`aura::Visualiser::lights`, `PumpAura`) or a flickering red. Speed = rpm/1000 turns a second, from `PumpFan`: "" =
+CPU fan (`sensors::cpu_fan`: label "CPU", else nct67xx fan2, else first spinning), a fan id ("nct6799/fan7", hwmon;
+Linux only, Windows has no fan source yet) or "manual" (`PumpRpm`). ~8-21 ms a frame. `pump_dump` (ignored test)
+writes frames at several speeds, lights and coolant colours.
+
 ## Game mode
 
 `src/core/src/win/games.rs` detects games using only Windows sources:
@@ -185,7 +202,7 @@ Water temperature is then polled at `GameSensorMs`. The CPU-temp helper reads it
   entries; Recommends libayatana-appindicator3-1 for the tray; Provides/Conflicts/Replaces `ttlcd`). The Ubuntu App
   Center installs one local .deb at a time and failed on a dependency on `ttlcd`; don't reintroduce one. No Mono or
   GTK# any more (GTK# 3 is gone from Debian/Ubuntu, which is why 1.x had to bundle it).
-- Studio on Linux: only Image, GIF, Colour, Clock, Aura and Off (`model::supports`); no game detection (manual game
+- Studio on Linux: only Image, GIF, Colour, Clock, Aura, Pump and Off (`model::supports`); no game detection (manual game
   mode); CPU temperature from hwmon (k10temp/zenpower/coretemp). It stops the `ttlcd` user service while open. Single
   instance via 127.0.0.1:47913 ("ttlcd show"), same as 1.x.
 - Aura on Linux: `aura::Reader` reads `$XDG_RUNTIME_DIR/armory-crate/virtual/ttlcd.ttas` (same TTAS block as the

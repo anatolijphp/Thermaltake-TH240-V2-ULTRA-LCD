@@ -560,6 +560,8 @@ impl Studio {
             "autostart": platform::autostart(),
             "palette": model::PALETTE,
             "monitors": monitors,
+            // the Pump mode's speed sources (read now; their speed updates in the status)
+            "fans": if c.Mode == Mode::Pump { ttlcd_core::sensors::fans().iter().map(|f| json!({"id": f.id, "label": f.label})).collect::<Vec<_>>() } else { vec![] },
             "vd": vd,
             "aura": {"text": if self.aura.on { self.aura.text.clone() } else { aura_text }, "installed": aura_inst, "busy": self.aura.on},
             "svc": {"text": if self.svc.on { self.svc.text.clone() } else { platform::sensor_status() }, "installed": svc_inst, "busy": self.svc.on},
@@ -619,6 +621,15 @@ impl Studio {
             "full": self.full,
             "svc": if settings { platform::sensor_status() } else { String::new() },
             "aura": aura,
+            "pump": if c.Mode == Mode::Pump {
+                let fans = ttlcd_core::sensors::fans();
+                match ttlcd_core::sensors::pump_source(&c.PumpFan, &fans) {
+                    Some(f) => json!({"rpm": f.rpm, "source": f.label, "fans": fans.len()}),
+                    None => json!({"rpm": c.PumpRpm, "source": null, "fans": fans.len()}),
+                }
+            } else {
+                Value::Null
+            },
             "cacheInfo": if !settings { String::new() } else if video::supported() { model::cache_info() } else { format!("Settings: {}", config::folder().display()) },
         });
         self.js("status", v);

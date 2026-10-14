@@ -9,7 +9,7 @@ import { useOptimistic } from '../../../optimistic.js';
 const TILES = [
   ['Off', 'Off', 'power'], ['VirtualDisplay', 'Wallpaper Engine', 'monitor'], ['Monitor', 'Screen mirror', 'mirror'],
   ['Image', 'Image', 'image'], ['Gif', 'GIF', 'play'], ['Video', 'Video', 'video'], ['Color', 'Colour', 'palette'],
-  ['Clock', 'Clock', 'clock'], ['Aura', 'Aura Sync', 'aura'],
+  ['Clock', 'Clock', 'clock'], ['Aura', 'Aura Sync', 'aura'], ['Pump', 'Pump', 'pump'],
 ];
 
 export default function ModeTiles({ modes, mode, auraReady }) {
