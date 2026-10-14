@@ -291,7 +291,8 @@ impl Studio {
             "select" => {
                 let (Some(kind), id) = (kind_of(&s("list")), msg["id"].as_i64().unwrap_or(-9) as i32) else { return };
                 if kind.def(id).is_some() {
-                    self.sel = Some((kind, id));
+                    // a second click on the selected reading deselects it (and hides its text style)
+                    self.sel = if self.sel == Some((kind, id)) { None } else { Some((kind, id)) };
                     self.push_state();
                 }
             }
