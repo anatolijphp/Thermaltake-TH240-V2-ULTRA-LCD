@@ -213,6 +213,8 @@ fn main() -> wry::Result<()> {
     };
     #[cfg(not(target_os = "linux"))]
     let webview = builder.build(&window)?;
+    // dropped before exiting, so the web engine shuts its page process down cleanly (see the quit path)
+    let mut webview = Some(webview);
 
     let mut st = Studio::new(engine.clone(), blobs.clone(), proxy.clone());
     st.no_save = shot.is_some();
@@ -394,7 +396,9 @@ fn main() -> wry::Result<()> {
             _ => {}
         }
         for s in st.out.drain(..) {
-            let _ = webview.evaluate_script(&s);
+            if let Some(w) = &webview {
+                let _ = w.evaluate_script(&s);
+            }
         }
         if quit && !quitting {
             // on exit: save, stop the engine (it blanks the screen when BlankOnExit), hand back to the service
@@ -405,6 +409,20 @@ fn main() -> wry::Result<()> {
             tray = None;
             st.engine.stop();
             os::after_exit();
+            // close the web view first and give it a moment: exiting while WebKitGTK is still tearing down its
+            // separate page process made that process abort ("corrupted double-linked list") now and then
+            drop(webview.take());
+            #[cfg(target_os = "linux")]
+            {
+                let until = Instant::now() + Duration::from_millis(300);
+                while Instant::now() < until {
+                    if gtk::events_pending() {
+                        gtk::main_iteration_do(false);
+                    } else {
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                }
+            }
             *flow = ControlFlow::Exit;
         }
     });
