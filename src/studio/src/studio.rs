@@ -35,6 +35,12 @@ impl Blobs {
     }
 }
 
+const IMAGE_EXT: [&str; 6] = ["jpg", "jpeg", "png", "bmp", "webp", "tif"];
+
+fn engine_label(m: Mode) -> &'static str {
+    ttlcd_core::engine::label(m)
+}
+
 /// A command-line job (install/uninstall) running for a status label.
 #[derive(Default)]
 struct Busy {
@@ -54,6 +60,8 @@ pub struct Studio {
     /// so dragging a slider doesn't rebuild the page 60 times a second
     dirty_state: bool,
     dirty_status: bool,
+    /// mode before a file dragged over the window picked one (put back if the drag leaves without a drop)
+    drag_prev: Option<Mode>,
     sel: Option<(ListKind, i32)>,
     drags: [Option<LineDrag>; 2],
     pub page: String,
@@ -115,6 +123,7 @@ impl Studio {
             save_at: None,
             dirty_state: false,
             dirty_status: false,
+            drag_prev: None,
             sel: None,
             drags: [None, None],
             page: "dashboard".into(),
@@ -186,6 +195,7 @@ impl Studio {
     }
 
     // ================= messages from the page =================
+
     pub fn handle(&mut self, msg: &Value, window: &Window) {
         let t = msg["t"].as_str().unwrap_or("");
         let s = |k: &str| msg[k].as_str().unwrap_or("").to_string();
@@ -608,31 +618,120 @@ impl Studio {
         let c = self.cfg();
         match what {
             "image" => {
-                if let Some(p) = Self::pick("Images", &["jpg", "jpeg", "png", "bmp", "webp"], &c.ImagePath, window) {
-                    self.change(|c| c.ImagePath = p);
+                if let Some(p) = Self::pick("Images", &IMAGE_EXT, &c.ImagePath, window) {
+                    self.set_media(Mode::Image, p);
                 }
             }
             "gif" => {
                 if let Some(p) = Self::pick("GIF animations", &["gif"], &c.GifPath, window) {
-                    self.change(|c| c.GifPath = p);
+                    self.set_media(Mode::Gif, p);
                 }
             }
             "video" => {
-                if let Some(p) = Self::pick("Videos", &["mp4", "mov", "avi", "wmv", "mkv", "webm", "m4v"], &c.VideoPath, window) {
-                    let p2 = p.clone();
-                    self.change(|c| {
-                        c.VideoPath = p2;
-                        c.VideoStart = 0.0;
-                        c.VideoZoom = 1.0;
-                        c.VideoPanX = 0.0;
-                        c.VideoPanY = 0.0;
-                    });
-                    self.load_video_info(p);
+                if let Some(p) = Self::pick("Videos", &idle::VIDEO_EXT, &c.VideoPath, window) {
+                    self.set_media(Mode::Video, p);
                 }
             }
             _ => {}
         }
         self.push_state();
+    }
+
+    /// The file a picture / GIF / video mode shows.
+    fn set_media(&mut self, mode: Mode, p: String) {
+        match mode {
+            Mode::Image => self.change(|c| c.ImagePath = p),
+            Mode::Gif => self.change(|c| c.GifPath = p),
+            Mode::Video => {
+                let p2 = p.clone();
+                self.change(|c| {
+                    c.VideoPath = p2;
+                    c.VideoStart = 0.0;
+                    c.VideoZoom = 1.0;
+                    c.VideoPanX = 0.0;
+                    c.VideoPanY = 0.0;
+                });
+                self.load_video_info(p);
+            }
+            _ => {}
+        }
+    }
+
+    // ================= files dragged into the window =================
+    /// The mode that shows a file, by its extension (only modes this system has).
+    fn mode_for_file(path: &str) -> Option<Mode> {
+        let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+        let m = if ext == "gif" {
+            Mode::Gif
+        } else if IMAGE_EXT.contains(&ext.as_str()) {
+            Mode::Image
+        } else if idle::VIDEO_EXT.contains(&ext.as_str()) {
+            Mode::Video
+        } else {
+            return None;
+        };
+        model::supports(m).then_some(m)
+    }
+
+    /// A file is dragged over the window: the matching mode is selected at once (put back if the drag leaves), the
+    /// page greys out all but the preview and shows a drop icon on it. In the Idle view the file becomes the idle
+    /// picture instead.
+    pub fn drag_enter(&mut self, paths: Vec<String>) {
+        let file = paths.first().cloned().unwrap_or_default();
+        let name = std::path::Path::new(&file).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let mode = Self::mode_for_file(&file);
+        let idle_ok = mode.is_some() && (mode != Some(Mode::Video) || video::supported());
+        let (target, ok) = if self.idle_view { ("idle", idle_ok) } else { ("mode", mode.is_some()) };
+        if target == "mode" {
+            if let Some(m) = mode {
+                let cur = self.cfg().Mode;
+                if cur != m {
+                    self.drag_prev.get_or_insert(cur);
+                    self.change(|c| c.Mode = m);
+                    self.dirty_state = true;
+                    self.dirty_status = true;
+                }
+            }
+        }
+        let label = match (target, mode) {
+            (_, None) => "This file type can't be shown".to_string(),
+            ("idle", Some(_)) if !ok => "Videos need the Windows version".to_string(),
+            ("idle", _) => "Drop to use as the idle picture".to_string(),
+            (_, Some(m)) => format!("Drop to show it ({})", engine_label(m)),
+        };
+        self.js("dnd", json!({"active": true, "ok": ok, "target": target, "label": label, "name": name}));
+    }
+
+    pub fn drag_leave(&mut self) {
+        if let Some(prev) = self.drag_prev.take() {
+            self.change(|c| c.Mode = prev);
+            self.dirty_state = true;
+            self.dirty_status = true;
+        }
+        self.js("dnd", json!({"active": false}));
+    }
+
+    pub fn drag_drop(&mut self, paths: Vec<String>) {
+        self.js("dnd", json!({"active": false}));
+        let Some(file) = paths.first().cloned() else { return self.drag_leave() };
+        let mode = Self::mode_for_file(&file);
+        if self.idle_view {
+            self.drag_prev = None;
+            if mode.is_some() && (mode != Some(Mode::Video) || video::supported()) {
+                self.load_idle(&file);
+            }
+            return;
+        }
+        match mode {
+            Some(m) => {
+                self.drag_prev = None;
+                self.change(|c| c.Mode = m);
+                self.set_media(m, file);
+                self.dirty_state = true;
+                self.dirty_status = true;
+            }
+            None => self.drag_leave(),
+        }
     }
 
     // ================= video editor (Windows) =================

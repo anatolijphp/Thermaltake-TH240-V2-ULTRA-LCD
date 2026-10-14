@@ -231,6 +231,47 @@ pub fn store(ed: &Arc<Mutex<IdleEditor>>, engine: &Engine, progress: impl FnMut(
 
 #[cfg(test)]
 mod tests {
+    /// Whatever goes in (a huge noisy photo compresses worst; an animated GIF), what would be uploaded is one still
+    /// 480x480 JPEG within the firmware's 950 KB limit.
+    #[test]
+    fn idle_picture_is_a_480_jpeg_within_the_limit() {
+        let dir = std::env::temp_dir().join(format!("ttlcd-idle-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // 4000x3000 noise as PNG
+        let mut seed = 1u32;
+        let noise = image::RgbaImage::from_fn(4000, 3000, |_, _| {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            let b = seed.to_le_bytes();
+            image::Rgba([b[1], b[2], b[3], 255])
+        });
+        let png = dir.join("noise.png");
+        noise.save(&png).unwrap();
+        // a 2-frame GIF
+        let gif = dir.join("anim.gif");
+        {
+            let f = std::fs::File::create(&gif).unwrap();
+            let mut enc = image::codecs::gif::GifEncoder::new(f);
+            let frames = [image::Rgba([255, 0, 0, 255]), image::Rgba([0, 0, 255, 255])]
+                .map(|c| image::Frame::new(image::RgbaImage::from_pixel(600, 400, c)));
+            enc.encode_frames(frames).unwrap();
+        }
+        for file in [&png, &gif] {
+            let mut ed = super::IdleEditor::new();
+            ed.load(file.to_str().unwrap()).unwrap();
+            for zoom in [1.0, 5.0] {
+                ed.set_zoom(zoom);
+                ed.encode();
+                let j = ed.jpeg.clone().unwrap();
+                assert!(j.len() <= super::LIMIT, "{} KB", j.len() / 1024);
+                assert!(ed.fits());
+                assert_eq!(&j[..2], &[0xFF, 0xD8], "JPEG");
+                let back = image::load_from_memory(&j).unwrap();
+                assert_eq!((back.width(), back.height()), (480, 480));
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// TTLCD_DUMP=<file.jpg> cargo test -p ttlcd-core dump_lcd_frame -- --ignored: the idle-look frame for checking
     #[test]
     #[ignore]

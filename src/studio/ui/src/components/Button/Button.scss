@@ -1,0 +1,11 @@
+@use 'tokens' as *;
+
+.btn { background: $cardhi; border: 1px solid $line; padding: 7px 16px; border-radius: 2px; color: $text; white-space: nowrap;
+  &:hover { border-color: $accent; box-shadow: $glowsoft; }
+  &:active { background: $accentdim; }
+  &.accent { background: $accent; border-color: $accent; color: #fff; }
+  &:disabled { opacity: .4; pointer-events: none; }
+}
+.iconbtn { color: $dim; display: flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 2px;
+  &:hover { background: $cardhi; border-color: $accent; color: $text; }
+}

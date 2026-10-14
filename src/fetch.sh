@@ -7,6 +7,7 @@
 #                        a small pkg-config that reads them (no pkg-config package needed)
 #   tools/zig/           Zig 0.16.0 as the Linux C linker ("zig cc"), only when the machine has no cc (or TTLCD_ZIG=1)
 #   tools/cargo-home/    CARGO_HOME: crates.io downloads (pinned by Cargo.lock checksums)
+#   tools/node/          Node.js 24.21.0 LTS: builds Studio's React UI (packages pinned by src/studio/ui/package-lock.json)
 # Windows host: src\fetch.cmd does the same with the Windows-hosted archives.
 set -e
 cd "$(dirname "$0")/.."
@@ -17,6 +18,7 @@ mkdir -p "$DL"
 RUST=https://static.rust-lang.org/dist/2026-08-20
 MINGW=https://github.com/mstorsjo/llvm-mingw/releases/download/20260922
 ZIG=https://ziglang.org/download/0.16.0
+NODE=https://nodejs.org/dist/v24.21.0
 # url sha256
 PINS="
 $RUST/rustc-1.98.0-x86_64-unknown-linux-gnu.tar.xz 0e37cb339f447fc44d6d781073bacacebfdc5612f2600e4c7e84c266f5f3aced
@@ -26,6 +28,7 @@ $RUST/rust-std-1.98.0-x86_64-pc-windows-gnullvm.tar.xz 9e7a4a69893cd2dff7211fbaa
 $RUST/rust-std-1.98.0-i686-pc-windows-gnullvm.tar.xz c5796b30bacafb54e6343bf89653c167f558c1f9b840a04996565c8219d17c27
 $MINGW/llvm-mingw-20260922-ucrt-ubuntu-22.04-x86_64.tar.xz bb7bb7654b33d5aa8712acb837c963b2e0c56352560c76105270a3268c665c21
 $ZIG/zig-x86_64-linux-0.16.0.tar.xz 70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+$NODE/node-v24.21.0-linux-x64.tar.xz fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6
 "
 
 fetch() { # url sha -> path of the verified archive
@@ -66,6 +69,15 @@ if [ ! -f "$T/llvm-mingw/.done-20260922" ]; then
     a=$(fetch "$1" "$2")
     mkdir -p "$T/llvm-mingw" && tar -xJf "$a" -C "$T/llvm-mingw" --strip-components=1
     touch "$T/llvm-mingw/.done-20260922"
+fi
+
+# Node.js: esbuild + Sass build the Studio UI (src/studio/ui) during the studio crate's build.rs
+if [ ! -f "$T/node/.done-24.21.0" ]; then
+    rm -rf "$T/node"
+    set -- $(echo "$PINS" | grep node-v)
+    a=$(fetch "$1" "$2")
+    mkdir -p "$T/node" && tar -xJf "$a" -C "$T/node" --strip-components=1
+    touch "$T/node/.done-24.21.0"
 fi
 
 # Zig: the Linux binaries need a C linker (rustc drives "cc"). Ubuntu desktops have no gcc by default, so without

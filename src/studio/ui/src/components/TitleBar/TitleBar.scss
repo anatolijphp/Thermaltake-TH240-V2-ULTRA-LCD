@@ -1,0 +1,24 @@
+@use 'tokens' as *;
+
+.titlebar { position: relative; height: 48px; flex: none; background: #050505; display: flex; align-items: center;
+  .logo-bg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+  .slash { filter: drop-shadow(0 0 6px rgba(255, 31, 75, .9)); }
+  .logo { position: relative; margin-left: 22px; display: flex; align-items: baseline; pointer-events: none;
+    b { font-weight: 900; font-size: 19px; color: $accent; text-shadow: 0 0 8px rgba(255, 31, 75, .6); letter-spacing: -.5px; }
+    span { font-weight: 600; font-size: 15px; margin-left: 6px; letter-spacing: .2px; }
+  }
+  .title-status { position: absolute; left: 50%; transform: translateX(-50%); color: $dim; font-size: 12px; white-space: nowrap; pointer-events: none; }
+  .tb-btns { margin-left: auto; display: flex; height: 100%; position: relative; }
+  .tb { width: 48px; height: 100%; color: $dim; display: flex; align-items: center; justify-content: center; font-size: 12px;
+    &:hover { background: rgba(255, 255, 255, .13); }
+  }
+  .tbtoggle { font-size: 18px;
+    &.on { color: $accent; filter: drop-shadow(0 0 6px rgba(255, 31, 75, .9)); }
+  }
+  // flowing RGB line under the bar
+  .rgbline { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; opacity: .9;
+    background: linear-gradient(90deg, #FF1F4B 0%, #FF8A00 8.5%, #FFE600 16.5%, #2BE36B 25%, #00E1FF 33.5%, #7A4BFF 41.5%, #FF1F4B 50%,
+      #FF8A00 58.5%, #FFE600 66.5%, #2BE36B 75%, #00E1FF 83.5%, #7A4BFF 91.5%, #FF1F4B 100%);
+    background-size: 200% 100%; box-shadow: 0 0 10px rgba(255, 43, 214, .8); animation: rgb-flow 6s linear infinite; }
+}
+@keyframes rgb-flow { from { background-position: 0 0; } to { background-position: -100% 0; } }

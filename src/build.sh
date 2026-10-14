@@ -25,7 +25,7 @@ case $WHAT in all|linux|windows) ;; *) echo "usage: $0 [all|linux|windows]" >&2;
 
 need_zig() { ! command -v cc >/dev/null 2>&1 || [ "${TTLCD_ZIG:-}" = 1 ]; }
 if [ ! -f "$T/rust/.done-1.98.0" ] || [ ! -f "$T/rust/.done-rust-std-1.98.0-i686-pc-windows-gnullvm" ] ||
-   [ ! -f "$T/llvm-mingw/.done-20260922" ] || [ ! -x "$T/linux-pc/pkg-config" ] ||
+   [ ! -f "$T/llvm-mingw/.done-20260922" ] || [ ! -x "$T/linux-pc/pkg-config" ] || [ ! -f "$T/node/.done-24.21.0" ] ||
    { need_zig && [ ! -f "$T/zig/.done-0.16.0" ]; }; then
     sh ./fetch.sh
 fi

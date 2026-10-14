@@ -1,0 +1,11 @@
+@use 'tokens' as *;
+
+.seg { position: relative; display: inline-flex; padding: 2px; border: 1px solid $line; background: $cardhi; border-radius: 16px; width: fit-content;
+  button { position: relative; z-index: 1; padding: 5px 14px; border-radius: 13px; color: $dim; white-space: nowrap; transition: color .2s;
+    &:hover { background: rgba(255, 255, 255, .08); color: $text; }
+    &.sel, &.sel:hover { color: #fff; background: transparent; }
+  }
+  .pill { position: absolute; top: 2px; bottom: 2px; left: 0; width: 0; border-radius: 13px; background: $accent; box-shadow: $glowsoft; opacity: 0;
+    &.anim { transition: transform .2s $ease, width .2s $ease; }
+  }
+}

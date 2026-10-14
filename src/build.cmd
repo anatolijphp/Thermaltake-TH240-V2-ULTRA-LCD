@@ -22,6 +22,7 @@ set FETCH=
 if not exist "%T%\rust\.done-1.98.0" set FETCH=1
 if not exist "%T%\rust\.done-rust-std-1.98.0-i686-pc-windows-gnullvm" set FETCH=1
 if not exist "%T%\llvm-mingw\.done-20260922" set FETCH=1
+if not exist "%T%\node\.done-24.21.0" set FETCH=1
 if defined FETCH call "%RS%\fetch.cmd" || exit /b 1
 set "PATH=%T%\rust\bin;%T%\llvm-mingw\bin;%PATH%"
 set "CARGO_HOME=%T%\cargo-home"

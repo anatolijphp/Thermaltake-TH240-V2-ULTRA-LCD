@@ -1,0 +1,22 @@
+@use 'tokens' as *;
+
+.nav { width: $nav; flex: none; background: $panel; border-right: 1px solid $line; overflow: hidden;
+  display: flex; flex-direction: column; padding-top: 10px; transition: width .26s ease-in-out; position: relative; z-index: 1;
+  .nav-toggle { width: 40px; height: 40px; margin: 0 0 8px 13px; font-size: 16px; flex: none; }
+  .navitem { position: relative; height: 50px; display: flex; align-items: center; padding-left: 24px; color: $dim; text-align: left; white-space: nowrap; flex: none;
+    &:hover { background: rgba(255, 255, 255, .05); }
+    .bar { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: $accent; box-shadow: $glow; visibility: hidden; }
+    .ic { font-size: 18px; width: 18px; flex: none; }
+    .tx { margin-left: 14px; font-size: 14px; transition: opacity .3s; }
+    &.sel { background: linear-gradient(90deg, rgba(255, 31, 75, .2), rgba(255, 31, 75, 0));
+      .bar { visibility: visible; }
+      .ic { color: $accent; filter: drop-shadow(0 0 5px rgba(255, 31, 75, .7)); }
+      .tx { color: $text; }
+    }
+  }
+  .nav-footer { margin-top: auto; padding: 0 0 20px 24px; color: $dim; font-size: 11px; white-space: nowrap; transition: opacity .3s; }
+  .rgbtick { width: 36px; height: 2px; background: $rgb; margin-bottom: 10px; }
+}
+.navcol .nav { width: $nav-collapsed;
+  .navitem .tx, .nav-footer { opacity: 0; transition: opacity .14s; }
+}

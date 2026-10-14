@@ -1,0 +1,6 @@
+@use 'tokens' as *;
+
+.progress { height: 3px; background: #29292C; margin-top: 10px; overflow: hidden;
+  i { display: block; height: 100%; width: 0; background: $accent; transition: width .2s; }
+  &.cyan { height: 6px; margin-top: 12px; i { background: $accent2; } }
+}

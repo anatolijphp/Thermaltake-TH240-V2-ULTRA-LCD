@@ -142,9 +142,10 @@ GTK 3 and WebKitGTK 4.1 from the distribution.
 
 ## Build from source
 
-The app is written in Rust (`src/`). The build fetches its own toolchain into `tools/` (Rust 1.98.0 and llvm-mingw,
-pinned by version and SHA256, `src/fetch.sh` / `src\fetch.cmd`), so there is nothing to install: no rustup, no Visual
-Studio.
+The app is written in Rust (`src/`), its window UI in React + Sass. The build fetches its own toolchain into `tools/`
+(Rust 1.98.0, llvm-mingw and Node.js 24 LTS, pinned by version and SHA256, `src/fetch.sh` / `src\fetch.cmd`; npm
+packages are pinned by `src/studio/ui/package-lock.json`), so there is nothing to install: no rustup, no Visual Studio,
+no system Node.
 
 ```
 git clone https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD.git
@@ -236,7 +237,12 @@ ttlcd/
 │   │                         Aura plugin install, CPU temperature service
 │   ├── cli/                ttlcd: command line and Linux screen service (ttlcd run)
 │   ├── studio/             TT LCD Studio: window and tray
-│   │   ├── ui/               The interface (index.html, style.css, app.js), the same on both systems
+│   │   ├── ui/               The interface, the same on both systems: React components, each a folder with
+│   │   │   │                 Name.jsx + Name.scss (Sass), bundled by esbuild (build.mjs) during the cargo build
+│   │   │   ├── src/components/ Reusable parts (title bar, nav, slider, switch, segmented toggle, card, gauge, ...)
+│   │   │   ├── src/pages/      Dashboard, Display modes (tiles, line editor, video, text style), Device, Settings
+│   │   │   ├── src/preview/    The round live / idle preview, drag-and-drop target
+│   │   │   └── src/bridge.js   Messages to and from the Rust side
 │   │   └── src/os/           System-specific parts (linux.rs, windows.rs, WebView2 loader)
 │   ├── aura-hal/           TTLcdAura.dll: Armoury Crate / Aura Sync plugin (32- and 64-bit)
 │   └── installer/          TTLcdStudio-Setup.exe and ttlcd-pack (packs the app into the installer)

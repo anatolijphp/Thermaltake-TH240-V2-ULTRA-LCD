@@ -5,6 +5,7 @@ rem Every download is pinned by version + SHA256 and kept in tools\dl\rs\, so re
 rem   tools\rust\        rustc + cargo 1.98.0 for x86_64-pc-windows-gnullvm, std for x86_64 and i686 (the Aura plugin)
 rem   tools\llvm-mingw\  clang + lld + mingw-w64 (the linker; replaces Visual Studio's link.exe)
 rem   tools\cargo-home\  CARGO_HOME: crates.io downloads (pinned by Cargo.lock checksums)
+rem   tools\node\        Node.js 24.21.0 LTS: builds Studio's React UI (packages pinned by src\studio\ui\package-lock.json)
 rem Linux host: src/fetch.sh.
 setlocal enabledelayedexpansion
 cd /d "%~dp0.."
@@ -13,6 +14,7 @@ set "DL=%T%\dl\rs"
 if not exist "%DL%" mkdir "%DL%"
 set RUST=https://static.rust-lang.org/dist/2026-08-20
 set MINGW=https://github.com/mstorsjo/llvm-mingw/releases/download/20260922
+set NODE=https://nodejs.org/dist/v24.21.0
 
 rem Each merged archive leaves tools\rust\.done-<archive>; .done-1.98.0 marks the base set. A component pinned later
 rem (the i686 std) is merged into an existing tools\rust without fetching the rest again.
@@ -35,6 +37,13 @@ tar -xf "%DL%\llvm-mingw-20260922-ucrt-x86_64.zip" -C "%T%\llvm-mingw" --strip-c
 type nul > "%T%\llvm-mingw\.done-20260922"
 
 :done
+if exist "%T%\node\.done-24.21.0" goto node_ok
+if exist "%T%\node" rmdir /s /q "%T%\node"
+call :fetch %NODE%/node-v24.21.0-win-x64.zip node-v24.21.0-win-x64.zip 158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541 || exit /b 1
+mkdir "%T%\node"
+tar -xf "%DL%\node-v24.21.0-win-x64.zip" -C "%T%\node" --strip-components=1 || exit /b 1
+type nul > "%T%\node\.done-24.21.0"
+:node_ok
 if not exist "%T%\cargo-home" mkdir "%T%\cargo-home"
 "%T%\rust\bin\rustc.exe" --version || exit /b 1
 echo toolchain ready

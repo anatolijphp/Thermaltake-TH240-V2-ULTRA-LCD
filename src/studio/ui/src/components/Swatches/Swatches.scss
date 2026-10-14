@@ -1,0 +1,10 @@
+@use 'tokens' as *;
+
+.swatches { display: flex; flex-wrap: wrap; align-items: center; }
+.sw { position: relative; width: 26px; height: 26px; border-radius: 50%; margin: 2px 7px 2px 0; border: 1px solid $linehi; flex: none;
+  &:hover { border: 2px solid #fff; }
+  &.cur { box-shadow: 0 0 0 2px $bg, 0 0 0 3px rgba(255, 255, 255, .55); }
+  &.custom { background: conic-gradient(#FF1F4B, #FFE600, #2BE36B, #00E1FF, #7A4BFF, #FF2BD6, #FF1F4B); overflow: hidden;
+    input { position: absolute; inset: -4px; width: 34px; height: 34px; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+  }
+}

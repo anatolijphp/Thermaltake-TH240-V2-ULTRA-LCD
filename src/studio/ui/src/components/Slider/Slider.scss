@@ -1,0 +1,8 @@
+@use 'tokens' as *;
+
+.slider { position: relative; height: 26px; cursor: pointer; touch-action: none; margin-right: 4px;
+  .tr { position: absolute; left: 0; right: 0; top: 11.5px; height: 3px; background: #2C2C2F; }
+  .fi { position: absolute; left: 0; top: 11.5px; height: 3px; background: linear-gradient(90deg, #7A1028, $accent); }
+  .th { position: absolute; top: 7.5px; width: 11px; height: 11px; margin-left: -5.5px; background: #fff; border: 2px solid $accent;
+    transform: rotate(45deg); box-shadow: $glowsoft; }
+}

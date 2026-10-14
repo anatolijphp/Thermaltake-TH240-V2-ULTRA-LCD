@@ -43,7 +43,8 @@ Version 2.0 is Rust: `src/` is a cargo workspace. The C# 1.x Studio was removed;
 before 2.0, e.g. `ed769c0` = 1.3.3).
 
 - Toolchain: `src/fetch.sh` (Linux host) / `src/fetch.cmd` (Windows host; only curl.exe, tar.exe, certutil.exe) put
-  Rust 1.98.0 (+ std for x86_64/i686 Windows) and llvm-mingw 20260922 into `tools/`; crates go to
+  Rust 1.98.0 (+ std for x86_64/i686 Windows), llvm-mingw 20260922 and Node.js 24.21.0 into `tools/`; npm packages
+  come from `npm ci` (pinned by `src/studio/ui/package-lock.json`, cache in `tools/npm-cache`); crates go to
   `tools/cargo-home` (pinned by `src/Cargo.lock`). Windows targets are `*-pc-windows-gnullvm` linked by llvm-mingw:
   no Visual Studio. On Linux the GTK/WebKitGTK crates link against the desktop's own runtime libraries through
   pkg-config stubs in `tools/linux-pc` (no `-dev` packages). Without a C compiler fetch.sh also brings Zig as linker.
@@ -70,7 +71,7 @@ before 2.0, e.g. `ed769c0` = 1.3.3).
 |---|---|
 | `src/core/` | Everything UI-free: `hid/` (hidraw; SetupAPI + overlapped I/O, a timed-out read stays pending), `lcd.rs` (protocol; one lock per interface; `Global\TTLcd.Device` mutex on Windows, flock on Linux), `config.rs` (same `config.xml` as C#), `engine.rs` (render/send/control/game threads, 500 ms keep-alive, LX800 red/blue swap at send time), `render/` (tiny-skia + fontdb/rustybuzz text paths, round-panel fitting, effects), `aura.rs` (TTAS reader + visualiser), `model.rs` (Studio texts/panels/rotation/dashboard/LineDrag), `idle.rs`, `store.rs`, `sensors.rs`, `video.rs`, `capture.rs`, `games.rs`, `platform.rs`, `win/` (Windows: shared memory, registry, elevation, GDI capture, Media Foundation `mf.rs`, games, virtual display `vdd.rs`, `aura_install.rs`, `sensors.rs` helper/service) |
 | `src/cli/` | `ttlcd` command line and screen service (`ttlcd run`) |
-| `src/studio/` | Studio: wry/tao window, one HTML/CSS/JS UI in `ui/` served over a custom protocol (WebView2 on Windows with a built-in loader, no WebView2Loader.dll; WebKitGTK on Linux), tray (tray-icon), `os/linux.rs` + `os/windows.rs` |
+| `src/studio/` | Studio: wry/tao window, tray (tray-icon), `os/linux.rs` + `os/windows.rs`, `studio.rs` (state for the page, messages from it, drag and drop of files). The page is `ui/`: React 19 components, each a folder with `Name.jsx` + `Name.scss` (Sass; shared `styles/_tokens.scss`), bundled by esbuild (`ui/build.mjs`) from build.rs into OUT_DIR and served over a custom protocol (WebView2 on Windows with a built-in loader, no WebView2Loader.dll; WebKitGTK on Linux). `ui/src/bridge.js` = JSON messages out (`window.ipc`), `window.ttlcd.*` calls in, a small store read with `useStore` |
 | `src/aura-hal/` | `TTLcdAura.dll`: Armoury Crate HAL COM plugin written by hand (vtables), i686 + x86_64; `examples/probe.rs` self-test |
 | `src/installer/` | `TTLcdStudio-Setup.exe` (Win32 UI, per-user install/uninstall) and `ttlcd-pack` |
 | `linux/` | Debian packaging: control files, udev rule, systemd user unit, desktop entry, icon |

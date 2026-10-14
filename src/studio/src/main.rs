@@ -31,11 +31,16 @@ pub enum UserEvent {
     CliDone(String, String),
     IdleProgress(i32, String),
     IdleDone(String, bool, bool),
+    /// files dragged over the window (paths on enter), left again, or dropped
+    DragEnter(Vec<String>),
+    DragLeave,
+    DragDrop(Vec<String>),
 }
 
-const INDEX: &str = include_str!("../ui/index.html");
-const STYLE: &str = include_str!("../ui/style.css");
-const SCRIPT: &str = include_str!("../ui/app.js");
+// the UI bundle build.rs makes from ui/ (React components + Sass)
+const INDEX: &str = include_str!(concat!(env!("OUT_DIR"), "/ui/index.html"));
+const STYLE: &str = include_str!(concat!(env!("OUT_DIR"), "/ui/app.css"));
+const SCRIPT: &str = include_str!(concat!(env!("OUT_DIR"), "/ui/app.js"));
 const ICON_PNG: &[u8] = include_bytes!("../../../linux/ttlcd-studio.png");
 
 struct Shot {
@@ -56,7 +61,7 @@ fn serve(blobs: &Blobs, req: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> 
     let path = req.uri().path();
     let (mime, body): (&str, Option<Cow<'static, [u8]>>) = match path {
         "/" | "/index.html" => ("text/html; charset=utf-8", Some(Cow::Borrowed(INDEX.as_bytes()))),
-        "/style.css" => ("text/css; charset=utf-8", Some(Cow::Borrowed(STYLE.as_bytes()))),
+        "/app.css" => ("text/css; charset=utf-8", Some(Cow::Borrowed(STYLE.as_bytes()))),
         "/app.js" => ("text/javascript; charset=utf-8", Some(Cow::Borrowed(SCRIPT.as_bytes()))),
         "/icon.png" => ("image/png", Some(Cow::Borrowed(ICON_PNG))),
         p if p.starts_with("/frame/") => ("image/jpeg", blobs.frame().map(|(_, j)| Cow::Owned(j.to_vec()))),
@@ -180,6 +185,23 @@ fn main() -> wry::Result<()> {
         .with_url(format!("{}index.html", os::ui_base_url()))
         .with_background_color((7, 7, 7, 255))
         .with_devtools(std::env::var("TTLCD_DEVTOOLS").is_ok_and(|v| v == "1"))
+        // files dragged into the window: handled here (real paths; the page only shows the feedback)
+        .with_drag_drop_handler({
+            let p = proxy.clone();
+            move |e: wry::DragDropEvent| {
+                let paths = |v: &[PathBuf]| v.iter().map(|x| x.to_string_lossy().into_owned()).collect::<Vec<_>>();
+                let ev = match e {
+                    wry::DragDropEvent::Enter { paths: v, .. } => Some(UserEvent::DragEnter(paths(&v))),
+                    wry::DragDropEvent::Drop { paths: v, .. } => Some(UserEvent::DragDrop(paths(&v))),
+                    wry::DragDropEvent::Leave => Some(UserEvent::DragLeave),
+                    _ => None,
+                };
+                if let Some(ev) = ev {
+                    let _ = p.send_event(ev);
+                }
+                true // the web page must not open the file itself
+            }
+        })
         .with_ipc_handler(move |req: Request<String>| {
             let _ = ipc_proxy.send_event(UserEvent::Ipc(req.into_body()));
         });
@@ -357,6 +379,9 @@ fn main() -> wry::Result<()> {
                 UserEvent::CliDone(what, out) => st.cli_done(&what, &out),
                 UserEvent::IdleProgress(p, what) => st.idle_progress(p, &what),
                 UserEvent::IdleDone(s, ok, store) => st.idle_done(s, ok, store),
+                UserEvent::DragEnter(p) => st.drag_enter(p),
+                UserEvent::DragLeave => st.drag_leave(),
+                UserEvent::DragDrop(p) => st.drag_drop(p),
             },
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                 if st.engine.config().CloseToTray && st.has_tray && shot.is_none() {

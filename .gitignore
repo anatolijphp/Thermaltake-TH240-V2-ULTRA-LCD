@@ -18,3 +18,7 @@
 *.bin
 *.log
 !/firmware/*.bin
+
+# Studio UI build: npm packages (pinned by src/studio/ui/package-lock.json) and the local bundle
+/src/studio/ui/node_modules/
+/src/studio/ui/dist/
