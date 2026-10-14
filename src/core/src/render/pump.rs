@@ -964,6 +964,38 @@ mod tests {
         assert!(hi - lo > 20.0, "it flickers: {lo}..{hi}");
     }
 
+    /// The README GIF (docs/media/pump.gif): at rest in red light, spinning up, then Aura Sync colours going round.
+    /// `TTLCD_GIF=../docs/media/pump.gif cargo test --release -p ttlcd-core pump_gif -- --ignored`
+    #[test]
+    #[ignore]
+    fn pump_gif() {
+        use image::codecs::gif::{GifEncoder, Repeat};
+        let Some(out) = std::env::var_os("TTLCD_GIF") else { return };
+        let (fps, size) = (20.0f32, 400u32);
+        let mut p = Pump::default();
+        let mut enc = GifEncoder::new_with_speed(std::fs::File::create(out).unwrap(), 1);
+        enc.set_repeat(Repeat::Infinite).unwrap();
+        let n = (4.6 * fps) as usize;
+        for i in 0..n {
+            let t = i as f32 / fps;
+            // 0-0.8 s still, spin up to 2000 rpm by 2 s, Aura Sync light from 2.6 s
+            let rpm = 2000.0 * ((t - 0.8) / 1.2).clamp(0.0, 1.0).powf(1.5);
+            let lights: Vec<(f32, f32, f32)> = if t < 2.6 {
+                p.red_lights()
+            } else {
+                (0..LIGHTS).map(|k| {
+                    let h = ((k as f32 / LIGHTS as f32 + (t - 2.6) * 0.35) * 6.0).rem_euclid(6.0);
+                    let x = 255.0 * (1.0 - (h % 2.0 - 1.0).abs());
+                    match h as i32 { 0 => (255.0, x, 0.0), 1 => (x, 255.0, 0.0), 2 => (0.0, 255.0, x), 3 => (0.0, x, 255.0), 4 => (x, 0.0, 255.0), _ => (255.0, 0.0, x) }
+                }).collect()
+            };
+            let f = p.render(rpm, 1.0 / fps, 0x00D1FF, &lights);
+            let img = image::RgbaImage::from_raw(f.width(), f.height(), f.data().to_vec()).unwrap();
+            let small = image::imageops::resize(&img, size, size, image::imageops::FilterType::Triangle);
+            enc.encode_frame(image::Frame::from_parts(small, 0, 0, image::Delay::from_numer_denom_ms(1000, fps as u32))).unwrap();
+        }
+    }
+
     /// Frames to look at: `TTLCD_DUMP=<dir> cargo test -p ttlcd-core pump_dump -- --ignored --nocapture`
     #[test]
     #[ignore]

@@ -169,7 +169,9 @@ container that renders frames, screenshots of every Studio page and the UI check
 dependencies are cached from `main`. Tags `v*` publish a release with the files for both.
 
 Studio renders single pages with `--screenshot <png> <dashboard|modes[:Mode]|device|settings|idle>`; CI uploads them
-as artifacts. The GIFs in these pages were recorded with version 1.x (C#, in the git history before 2.0).
+as artifacts. The Studio GIFs in these pages were recorded with version 1.x (C#, in the git history before 2.0);
+`docs/media/pump.gif` is rendered by the Pump mode itself:
+`TTLCD_GIF=../docs/media/pump.gif cargo test --release -p ttlcd-core pump_gif -- --ignored` (in `src/`).
 
 ## Extending
 
