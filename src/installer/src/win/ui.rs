@@ -1,17 +1,23 @@
 //! The install window: plain Win32 in the app's dark style (port of Setup.cs SetupForm). Laid out once at the system
-//! DPI (the setup's manifest is system DPI aware).
+//! DPI (the setup's manifest is system DPI aware) from ttlcd_setup::layout. Steps: folder and options, then one
+//! per optional component (ttlcd_setup::media::COMPONENTS) with a GIF of what it adds to the LCD; the last installs.
 use super::install::{self, Options};
 use super::{wide, APP_NAME, VERSION};
 use std::cell::RefCell;
 use std::path::PathBuf;
+use std::time::Instant;
+use ttlcd_setup::layout::{self as l, Control, R};
+use ttlcd_setup::media::{self, Anim, COMPONENTS};
 use windows_sys::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
 use windows_sys::Win32::Graphics::Gdi::{
-    BeginPaint, CreateFontW, CreateSolidBrush, DeleteObject, DrawFocusRect, DrawTextW, EndPaint, FillRect, FrameRect, GetDC,
-    GetDeviceCaps, GetStockObject, InvalidateRect, ReleaseDC, SelectObject, SetBkColor, SetBkMode, SetDCBrushColor,
-    SetTextColor, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, DC_BRUSH, DEFAULT_CHARSET, DEFAULT_PITCH, DT_CENTER,
-    DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, DT_WORDBREAK, FF_DONTCARE, FW_NORMAL,
-    FW_SEMIBOLD, HBRUSH, HDC, HFONT, LOGPIXELSY, OUT_DEFAULT_PRECIS, PAINTSTRUCT, TRANSPARENT,
+    BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreateSolidBrush, DeleteDC,
+    DeleteObject, DrawFocusRect, DrawTextW, EndPaint, FillRect, FrameRect, GetDC, GetDeviceCaps, GetStockObject,
+    InvalidateRect, ReleaseDC, SelectObject, SetBkColor, SetBkMode, SetBrushOrgEx, SetDCBrushColor, SetStretchBltMode,
+    SetTextColor, StretchDIBits, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, DC_BRUSH,
+    DEFAULT_CHARSET, DEFAULT_PITCH, DIB_RGB_COLORS, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE,
+    DT_VCENTER, DT_WORDBREAK, FF_DONTCARE, FW_NORMAL, FW_SEMIBOLD, HALFTONE, HBRUSH, HDC, HFONT, LOGPIXELSY,
+    OUT_DEFAULT_PRECIS, PAINTSTRUCT, SRCCOPY, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Controls::{
@@ -19,21 +25,22 @@ use windows_sys::Win32::UI::Controls::{
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, IsWindowEnabled, SetFocus};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    AdjustWindowRectEx, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
-    GetWindowTextLengthW, GetWindowTextW, IsDialogMessageW, KillTimer, LoadCursorW, LoadImageW,
-    PostMessageW, PostQuitMessage, RegisterClassExW, SendMessageW, SetCursor, SetTimer, SetWindowTextW, ShowWindow,
+    AdjustWindowRectEx, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect, GetMessageW,
+    GetWindowTextLengthW, GetWindowTextW, IsDialogMessageW, KillTimer, LoadCursorW, LoadImageW, PostMessageW,
+    PostQuitMessage, RegisterClassExW, SendMessageW, SetCursor, SetTimer, SetWindowTextW, ShowWindow,
     SystemParametersInfoW, TranslateMessage, BM_GETCHECK, BM_SETCHECK, BS_AUTOCHECKBOX, BS_OWNERDRAW, CS_HREDRAW,
-    CS_VREDRAW, ES_AUTOHSCROLL, HMENU, IDC_ARROW, IDC_HAND, IMAGE_ICON, LR_DEFAULTCOLOR, MSG, SPI_GETWORKAREA,
+    CS_VREDRAW, ES_AUTOHSCROLL, HMENU, IDC_ARROW, IDC_HAND, IMAGE_ICON, LR_DEFAULTCOLOR, MSG, SPI_GETWORKAREA, SW_HIDE,
     SW_SHOW, WM_APP, WM_CLOSE, WM_COMMAND, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORSTATIC, WM_DESTROY,
-    WM_DRAWITEM, WM_PAINT, WM_SETCURSOR, WM_SETFONT, WM_TIMER, WNDCLASSEXW, WS_CAPTION, WS_CHILD, WS_MINIMIZEBOX,
-    WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE,
+    WM_DRAWITEM, WM_ERASEBKGND, WM_PAINT, WM_SETCURSOR, WM_SETFONT, WM_TIMER, WNDCLASSEXW, WS_CAPTION, WS_CHILD,
+    WS_CLIPCHILDREN, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP,
 };
 
 const fn rgb(r: u8, g: u8, b: u8) -> COLORREF {
     r as u32 | (g as u32) << 8 | (b as u32) << 16
 }
 const BG: COLORREF = rgb(13, 13, 14);
-const CARD: COLORREF = rgb(27, 27, 29);
+const CARD_RGB: [u8; 3] = [27, 27, 29]; // also the colour around the round screen in the GIFs
+const CARD: COLORREF = rgb(CARD_RGB[0], CARD_RGB[1], CARD_RGB[2]);
 const LINE: COLORREF = rgb(41, 41, 44);
 const FG: COLORREF = rgb(237, 237, 237);
 const DIM: COLORREF = rgb(143, 143, 148);
@@ -45,47 +52,51 @@ const WHITE: COLORREF = rgb(255, 255, 255);
 /// The RGB line under the title: colour stops at 0, 25, 50, 75 and 100 %.
 const RGB_STOPS: [(u8, u8, u8); 5] = [(255, 31, 75), (255, 230, 0), (0, 225, 255), (122, 75, 255), (255, 43, 214)];
 
-const ID_INSTALL: i32 = 1; // IDOK: Enter (through IsDialogMessage) presses it
+const ID_INSTALL: i32 = 1; // IDOK: Enter (through IsDialogMessage) presses it; "Next" on step 1
 const ID_CANCEL: i32 = 2; // IDCANCEL: Escape
 const ID_BROWSE: i32 = 100;
 const ID_EDIT: i32 = 101;
+const ID_BACK: i32 = 102;
 const ID_CHECK: i32 = 110;
+const ID_COMPONENT: i32 = 120;
 const WM_STATUS: u32 = WM_APP + 1;
 const WM_DONE: u32 = WM_APP + 2;
 const TIMER_BAR: usize = 1;
+const TIMER_GIF: usize = 2;
 
-/// Option checkboxes in the order of the C# setup: label, default.
-const CHECKS: [(&str, bool); 7] = [
+/// Step 1 checkboxes: label, default. The optional components (all off by default) are on step 2.
+const CHECKS: [(&str, bool); 4] = [
     ("Start menu shortcut", true),
     ("Desktop shortcut", true),
     ("Start with Windows (in the tray)", true),
     ("Launch TT LCD Studio when done", true),
-    ("CPU temperature service (needs TOWEI; administrator)", false),
-    ("Armoury Crate / Aura Sync plugin (administrator)", false),
-    ("Virtual 480×480 display for Wallpaper Engine (driver; administrator)", false),
 ];
 
-// layout in 96-DPI pixels (client area 560 x 470, as in the C# setup)
-const CLIENT: (i32, i32) = (560, 470);
-const DIR_BOX: (i32, i32, i32, i32) = (24, 126, 420, 28);
-const BROWSE: (i32, i32, i32, i32) = (452, 126, 84, 28);
-const CHECK_Y: i32 = 192;
-const CHECK_H: i32 = 26;
-const BAR: (i32, i32, i32, i32) = (24, 392, 512, 4);
-const STATUS: (i32, i32, i32, i32) = (24, 402, 400, 40);
-const INSTALL: (i32, i32, i32, i32) = (436, 418, 100, 34);
+/// A component GIF while it plays.
+struct Playing {
+    anim: Anim,
+    frame: usize,
+    elapsed_ms: u32,
+}
 
 struct Ui {
     edit: HWND,
     browse: HWND,
+    back: HWND,
     install: HWND,
     checks: Vec<HWND>,
+    components: Vec<HWND>,
+    gifs: Vec<Option<Playing>>,
+    gif_tick: Instant,
     f_ui: HFONT,
     f_title: HFONT,
     f_label: HFONT,
+    f_item: HFONT,
+    f_small: HFONT,
     br_bg: HBRUSH,
     br_card: HBRUSH,
     scale: f32,
+    step: usize,
     status: String,
     status_color: COLORREF,
     busy: bool,
@@ -107,13 +118,23 @@ impl Ui {
     fn px(&self, v: i32) -> i32 {
         (v as f32 * self.scale).round() as i32
     }
-    fn rect(&self, r: (i32, i32, i32, i32)) -> RECT {
+    fn rect(&self, r: R) -> RECT {
         RECT { left: self.px(r.0), top: self.px(r.1), right: self.px(r.0 + r.2), bottom: self.px(r.1 + r.3) }
     }
-    fn controls(&self) -> Vec<HWND> {
-        let mut v = vec![self.edit, self.browse, self.install];
-        v.extend(&self.checks);
+    /// Every control with its kind (which step shows it: layout::shown).
+    fn kinds(&self) -> Vec<(HWND, Control)> {
+        let mut v = vec![
+            (self.edit, Control::Folder),
+            (self.browse, Control::Folder),
+            (self.back, Control::Back),
+            (self.install, Control::Install),
+        ];
+        v.extend(self.checks.iter().map(|h| (*h, Control::Option)));
+        v.extend(self.components.iter().enumerate().map(|(i, h)| (*h, Control::Component(i))));
         v
+    }
+    fn controls(&self) -> Vec<HWND> {
+        self.kinds().into_iter().map(|(h, _)| h).collect()
     }
 }
 
@@ -167,9 +188,10 @@ pub fn run() -> Result<i32, String> {
         if RegisterClassExW(&wc) == 0 {
             return Err("cannot register the setup window class".into());
         }
-        let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+        // clip children: the window is painted from a back buffer, which must not cover the controls
+        let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
         let px = |v: i32| (v as f32 * scale).round() as i32;
-        let mut rc = RECT { left: 0, top: 0, right: px(CLIENT.0), bottom: px(CLIENT.1) };
+        let mut rc = RECT { left: 0, top: 0, right: px(l::CLIENT.0), bottom: px(l::CLIENT.1) };
         AdjustWindowRectEx(&mut rc, style, 0, 0);
         let (w, h) = (rc.right - rc.left, rc.bottom - rc.top);
         let mut work = RECT { left: 0, top: 0, right: 1024, bottom: 768 };
@@ -201,12 +223,13 @@ pub fn run() -> Result<i32, String> {
         }
 
         let f_ui = font(dpi, 9.5, FW_NORMAL as i32);
-        let child = |class: &str, text: &str, style: u32, r: (i32, i32, i32, i32), id: i32| {
+        let f_item = font(dpi, 13.0, FW_SEMIBOLD as i32);
+        let child = |class: &str, text: &str, style: u32, r: R, id: i32, f: HFONT| {
             let h = CreateWindowExW(
                 0,
                 wide(class).as_ptr(),
                 wide(text).as_ptr(),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | style,
+                WS_CHILD | WS_TABSTOP | style,
                 px(r.0),
                 px(r.1),
                 px(r.2),
@@ -216,8 +239,17 @@ pub fn run() -> Result<i32, String> {
                 hinst,
                 std::ptr::null(),
             );
-            SendMessageW(h, WM_SETFONT, f_ui as WPARAM, 0);
+            SendMessageW(h, WM_SETFONT, f as WPARAM, 0);
             h
+        };
+        let checkbox = |text: &str, r: R, id: i32, on: bool, f: HFONT| {
+            let c = child("BUTTON", text, BS_AUTOCHECKBOX as u32, r, id, f);
+            // classic drawing, so the WM_CTLCOLOR* text colour applies
+            SetWindowTheme(c, wide("").as_ptr(), wide("").as_ptr());
+            if on {
+                SendMessageW(c, BM_SETCHECK, BST_CHECKED as WPARAM, 0);
+            }
+            c
         };
         // the edit sits borderless inside the painted dir box, vertically centred
         let edit_h = px(18);
@@ -225,10 +257,10 @@ pub fn run() -> Result<i32, String> {
             0,
             wide("EDIT").as_ptr(),
             wide(install::default_dir()).as_ptr(),
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL as u32,
-            px(DIR_BOX.0 + 7),
-            px(DIR_BOX.1) + (px(DIR_BOX.3) - edit_h) / 2,
-            px(DIR_BOX.2 - 14),
+            WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL as u32,
+            px(l::DIR_BOX.0 + 7),
+            px(l::DIR_BOX.1) + (px(l::DIR_BOX.3) - edit_h) / 2,
+            px(l::DIR_BOX.2 - 14),
             edit_h,
             hwnd,
             ID_EDIT as HMENU,
@@ -236,32 +268,39 @@ pub fn run() -> Result<i32, String> {
             std::ptr::null(),
         );
         SendMessageW(edit, WM_SETFONT, f_ui as WPARAM, 0);
-        let browse = child("BUTTON", "Browse…", BS_OWNERDRAW as u32, BROWSE, ID_BROWSE);
-        let mut checks = Vec::new();
-        for (i, (text, on)) in CHECKS.iter().enumerate() {
-            let r = (24, CHECK_Y + i as i32 * CHECK_H, 512, CHECK_H);
-            let c = child("BUTTON", text, BS_AUTOCHECKBOX as u32, r, ID_CHECK + i as i32);
-            // classic drawing, so the WM_CTLCOLOR* text colour applies
-            SetWindowTheme(c, wide("").as_ptr(), wide("").as_ptr());
-            if *on {
-                SendMessageW(c, BM_SETCHECK, BST_CHECKED as WPARAM, 0);
-            }
-            checks.push(c);
-        }
-        let install = child("BUTTON", "Install", BS_OWNERDRAW as u32, INSTALL, ID_INSTALL);
+        let browse = child("BUTTON", "Browse…", BS_OWNERDRAW as u32, l::BROWSE, ID_BROWSE, f_ui);
+        let checks: Vec<HWND> = CHECKS
+            .iter()
+            .enumerate()
+            .map(|(i, (text, on))| checkbox(text, l::option_check(i), ID_CHECK + i as i32, *on, f_ui))
+            .collect();
+        let components: Vec<HWND> = COMPONENTS
+            .iter()
+            .enumerate()
+            .map(|(i, c)| checkbox(c.check, l::CHECK, ID_COMPONENT + i as i32, false, f_ui))
+            .collect();
+        let back = child("BUTTON", "Back", BS_OWNERDRAW as u32, l::BACK, ID_BACK, f_ui);
+        let install = child("BUTTON", "Next", BS_OWNERDRAW as u32, l::INSTALL, ID_INSTALL, f_ui);
 
         UI.with(|u| {
             *u.borrow_mut() = Some(Ui {
                 edit,
                 browse,
+                back,
                 install,
                 checks,
+                components,
+                gifs: Vec::new(),
+                gif_tick: Instant::now(),
                 f_ui,
                 f_title: font(dpi, 16.0, FW_SEMIBOLD as i32),
                 f_label: font(dpi, 8.5, FW_SEMIBOLD as i32),
+                f_item,
+                f_small: font(dpi, 9.0, FW_NORMAL as i32),
                 br_bg,
                 br_card,
                 scale,
+                step: 0,
                 status: String::new(),
                 status_color: DIM,
                 busy: false,
@@ -269,8 +308,8 @@ pub fn run() -> Result<i32, String> {
                 anim: 0,
             })
         });
+        set_step(hwnd, 0);
         ShowWindow(hwnd, SW_SHOW);
-        SetFocus(install);
 
         let mut msg: MSG = std::mem::zeroed();
         while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
@@ -280,7 +319,7 @@ pub fn run() -> Result<i32, String> {
             }
         }
         if let Some(u) = UI.with(|u| u.borrow_mut().take()) {
-            for o in [u.f_ui, u.f_title, u.f_label] {
+            for o in [u.f_ui, u.f_title, u.f_label, u.f_item, u.f_small] {
                 DeleteObject(o);
             }
             DeleteObject(u.br_bg);
@@ -288,6 +327,42 @@ pub fn run() -> Result<i32, String> {
         }
     }
     Ok(0)
+}
+
+/// Shows step 0 (folder, options) or 1 (components): its controls, the button texts, the GIFs playing on step 1.
+fn set_step(hwnd: HWND, step: usize) {
+    let Some((kinds, install)) = with(|u| {
+        u.step = step;
+        if step > 0 && u.gifs.is_empty() {
+            // decoded when the first component step shows: frames the folder step doesn't need
+            u.gifs = COMPONENTS
+                .iter()
+                .map(|c| {
+                    let mut anim = media::decode(c.gif, CARD_RGB).ok()?;
+                    media::fade_bottom(&mut anim, CARD_RGB);
+                    Some(Playing { anim, frame: 0, elapsed_ms: 0 })
+                })
+                .collect();
+        }
+        u.gif_tick = Instant::now();
+        (u.kinds(), u.install)
+    }) else {
+        return;
+    };
+    unsafe {
+        for (h, kind) in kinds {
+            ShowWindow(h, if l::shown(kind, step) { SW_SHOW } else { SW_HIDE });
+        }
+        SetWindowTextW(install, wide(if step + 1 < l::STEPS { "Next" } else { "Install" }).as_ptr());
+        InvalidateRect(install, std::ptr::null(), 0);
+        if l::step_component(step).is_some() {
+            SetTimer(hwnd, TIMER_GIF, 20, None);
+        } else {
+            KillTimer(hwnd, TIMER_GIF);
+        }
+        InvalidateRect(hwnd, std::ptr::null(), 0);
+        SetFocus(install);
+    }
 }
 
 fn text(hdc: HDC, f: HFONT, color: COLORREF, mut r: RECT, s: &str, flags: u32) {
@@ -327,26 +402,78 @@ fn gradient_at(t: f32) -> COLORREF {
     rgb(mix(a.0, b.0), mix(a.1, b.1), mix(a.2, b.2))
 }
 
-fn paint(u: &Ui, hdc: HDC) {
+/// The current frame of a component GIF, scaled into `r` (halftone: smooth at any DPI).
+fn draw_gif(hdc: HDC, p: &Playing, r: &RECT) {
+    let a = &p.anim;
+    let f = &a.frames[p.frame];
+    let mut bmi: BITMAPINFO = unsafe { std::mem::zeroed() };
+    bmi.bmiHeader = BITMAPINFOHEADER {
+        biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+        biWidth: a.width as i32,
+        biHeight: -(a.height as i32), // top-down rows
+        biPlanes: 1,
+        biBitCount: 32,
+        biCompression: BI_RGB,
+        ..unsafe { std::mem::zeroed() }
+    };
+    unsafe {
+        SetStretchBltMode(hdc, HALFTONE);
+        SetBrushOrgEx(hdc, 0, 0, std::ptr::null_mut());
+        StretchDIBits(
+            hdc,
+            r.left,
+            r.top,
+            r.right - r.left,
+            r.bottom - r.top,
+            0,
+            0,
+            a.width as i32,
+            a.height as i32,
+            f.bgra.as_ptr().cast(),
+            &bmi,
+            DIB_RGB_COLORS,
+            SRCCOPY,
+        );
+    }
+}
+
+fn paint(u: &Ui, hdc: HDC, client: &RECT) {
+    fill(hdc, client, BG);
     unsafe { SetBkMode(hdc, TRANSPARENT as i32) };
     let single = DT_LEFT | DT_SINGLELINE;
-    text(hdc, u.f_title, FG, u.rect((24, 20, 512, 36)), "TT  LCD STUDIO", single);
-    let line = u.rect((24, 58, 512, 2));
+    text(hdc, u.f_title, FG, u.rect(l::TITLE), "TT  LCD STUDIO", single);
+    let line = u.rect(l::RGB_LINE);
     let width = (line.right - line.left).max(1);
     for x in 0..width {
         let col = RECT { left: line.left + x, top: line.top, right: line.left + x + 1, bottom: line.bottom };
         fill(hdc, &col, gradient_at(x as f32 / (width - 1).max(1) as f32));
     }
     let sub = format!("Control the LCD of your Thermaltake TH240 V2 Ultra cooler.  Version {VERSION}");
-    text(hdc, u.f_ui, DIM, u.rect((24, 70, 512, 22)), &sub, single | DT_END_ELLIPSIS);
-    text(hdc, u.f_label, DIM, u.rect((24, 106, 300, 18)), "INSTALL TO", single);
-    let dir = u.rect(DIR_BOX);
-    fill(hdc, &dir, CARD);
-    frame(hdc, &dir, LINE);
-    text(hdc, u.f_label, DIM, u.rect((24, 170, 300, 18)), "OPTIONS", single);
+    text(hdc, u.f_ui, DIM, u.rect(l::SUBTITLE), &sub, single | DT_END_ELLIPSIS);
+    if u.step == 0 {
+        text(hdc, u.f_label, DIM, u.rect(l::SECTION), "INSTALL TO", single);
+        let dir = u.rect(l::DIR_BOX);
+        fill(hdc, &dir, CARD);
+        frame(hdc, &dir, LINE);
+        text(hdc, u.f_label, DIM, u.rect(l::OPTIONS_LABEL), "OPTIONS", single);
+    } else if let Some(i) = l::step_component(u.step) {
+        let c = &COMPONENTS[i];
+        let section = format!("OPTIONAL COMPONENT {} OF {}", i + 1, COMPONENTS.len());
+        text(hdc, u.f_label, DIM, u.rect(l::SECTION), &section, single);
+        let card = u.rect(l::CARD);
+        fill(hdc, &card, CARD);
+        frame(hdc, &card, LINE);
+        if let Some(Some(p)) = u.gifs.get(i) {
+            draw_gif(hdc, p, &u.rect(l::GIF));
+        }
+        text(hdc, u.f_item, FG, u.rect(l::NAME), c.title, single | DT_END_ELLIPSIS);
+        text(hdc, u.f_ui, DIM, u.rect(l::TEXT), c.text, DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+        let note = "Needs administrator rights: Windows asks while installing. It can also be added later in Studio.";
+        text(hdc, u.f_small, DIM, u.rect(l::NOTE), note, DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+    }
     if u.busy {
         // indeterminate progress: an accent segment sweeping along the track
-        let track = u.rect(BAR);
+        let track = u.rect(l::BAR);
         fill(hdc, &track, LINE);
         let tw = track.right - track.left;
         let seg = tw / 4;
@@ -361,7 +488,7 @@ fn paint(u: &Ui, hdc: HDC) {
             fill(hdc, &r, ACCENT);
         }
     }
-    text(hdc, u.f_ui, u.status_color, u.rect(STATUS), &u.status, DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+    text(hdc, u.f_ui, u.status_color, u.rect(l::STATUS), &u.status, DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
 }
 
 fn draw_button(d: &DRAWITEMSTRUCT, f: HFONT) {
@@ -378,11 +505,8 @@ fn draw_button(d: &DRAWITEMSTRUCT, f: HFONT) {
     let r = d.rcItem;
     fill(hdc, &r, bg);
     frame(hdc, &r, border);
-    let len = unsafe { GetWindowTextLengthW(d.hwndItem) }.max(0) as usize;
-    let mut buf = vec![0u16; len + 1];
-    let n = unsafe { GetWindowTextW(d.hwndItem, buf.as_mut_ptr(), buf.len() as i32) }.max(0) as usize;
     unsafe { SetBkMode(hdc, TRANSPARENT as i32) };
-    text(hdc, f, fg, r, &String::from_utf16_lossy(&buf[..n]), DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    text(hdc, f, fg, r, &window_text(d.hwndItem), DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     if d.itemState & ODS_FOCUS != 0 {
         let fr = RECT { left: r.left + 3, top: r.top + 3, right: r.right - 3, bottom: r.bottom - 3 };
         unsafe {
@@ -402,22 +526,28 @@ fn window_text(h: HWND) -> String {
     }
 }
 
-fn start_install(hwnd: HWND) {
-    let Some((edit, checks, controls)) = with(|u| (u.edit, u.checks.clone(), u.controls())) else { return };
-    let checked = |i: usize| unsafe { SendMessageW(checks[i], BM_GETCHECK, 0, 0) } == BST_CHECKED as LRESULT;
+fn install_dir() -> Option<String> {
+    let edit = with(|u| u.edit)?;
     let dir = window_text(edit).trim().trim_matches('"').to_string();
-    if dir.is_empty() {
+    (!dir.is_empty()).then_some(dir)
+}
+
+fn start_install(hwnd: HWND) {
+    let Some(dir) = install_dir() else { return };
+    let Some((checks, components, controls)) = with(|u| (u.checks.clone(), u.components.clone(), u.controls()))
+    else {
         return;
-    }
+    };
+    let on = |h: HWND| unsafe { SendMessageW(h, BM_GETCHECK, 0, 0) } == BST_CHECKED as LRESULT;
     let o = Options {
         dir: PathBuf::from(dir),
-        start_menu: checked(0),
-        desktop: checked(1),
-        autostart: checked(2),
-        launch: checked(3),
-        sensor_service: checked(4),
-        aura: checked(5),
-        virtual_display: checked(6),
+        start_menu: on(checks[0]),
+        desktop: on(checks[1]),
+        autostart: on(checks[2]),
+        launch: on(checks[3]),
+        sensor_service: on(components[0]),
+        aura: on(components[1]),
+        virtual_display: on(components[2]),
     };
     for c in controls {
         unsafe { EnableWindow(c, 0) };
@@ -426,12 +556,12 @@ fn start_install(hwnd: HWND) {
         u.busy = true;
         u.status.clear();
         u.status_color = DIM;
-        (u.rect(BAR), u.rect(STATUS))
+        (u.rect(l::BAR), u.rect(l::STATUS))
     });
     if let Some((b, s)) = bar {
         unsafe {
-            InvalidateRect(hwnd, &b, 1);
-            InvalidateRect(hwnd, &s, 1);
+            InvalidateRect(hwnd, &b, 0);
+            InvalidateRect(hwnd, &s, 0);
             SetTimer(hwnd, TIMER_BAR, 30, None);
         }
     }
@@ -456,23 +586,23 @@ fn set_status(hwnd: HWND, s: String, color: COLORREF) {
     if let Some(r) = with(|u| {
         u.status = s;
         u.status_color = color;
-        u.rect(STATUS)
+        u.rect(l::STATUS)
     }) {
-        unsafe { InvalidateRect(hwnd, &r, 1) };
+        unsafe { InvalidateRect(hwnd, &r, 0) };
     }
 }
 
 fn finish_install(hwnd: HWND, err: Option<String>) {
-    let Some((install, controls, bar)) = with(|u| {
+    let Some((install, back, controls, bar)) = with(|u| {
         u.busy = false;
         u.done = err.is_none();
-        (u.install, u.controls(), u.rect(BAR))
+        (u.install, u.back, u.controls(), u.rect(l::BAR))
     }) else {
         return;
     };
     unsafe {
         KillTimer(hwnd, TIMER_BAR);
-        InvalidateRect(hwnd, &bar, 1);
+        InvalidateRect(hwnd, &bar, 0);
     }
     match err {
         Some(e) => {
@@ -484,6 +614,7 @@ fn finish_install(hwnd: HWND, err: Option<String>) {
         None => {
             set_status(hwnd, "Done. TT LCD Studio is installed.".into(), GREEN);
             unsafe {
+                ShowWindow(back, SW_HIDE);
                 SetWindowTextW(install, wide("Close").as_ptr());
                 EnableWindow(install, 1);
                 SetFocus(install);
@@ -532,28 +663,61 @@ fn pick_folder(owner: HWND, current: &str) -> Option<String> {
     }
 }
 
+/// Advances the shown step's GIF by the time passed; its area when it changed frame.
+fn tick_gif() -> Option<RECT> {
+    with(|u| {
+        let now = Instant::now();
+        let dt = now.duration_since(u.gif_tick).as_millis().min(1000) as u32;
+        u.gif_tick = now;
+        let i = l::step_component(u.step)?;
+        let p = u.gifs.get_mut(i)?.as_mut()?;
+        p.elapsed_ms += dt;
+        let before = p.frame;
+        while p.elapsed_ms >= p.anim.frames[p.frame].delay_ms {
+            p.elapsed_ms -= p.anim.frames[p.frame].delay_ms;
+            p.frame = (p.frame + 1) % p.anim.frames.len();
+        }
+        (p.frame != before).then(|| u.rect(l::GIF))
+    })
+    .flatten()
+}
+
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     match msg {
+        WM_ERASEBKGND => 1, // WM_PAINT covers everything
         WM_PAINT => {
             let mut ps: PAINTSTRUCT = std::mem::zeroed();
             let hdc = BeginPaint(hwnd, &mut ps);
+            // drawn into a back buffer and copied in one go: the GIFs repaint 10 times a second without flicker
+            let mut client = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+            GetClientRect(hwnd, &mut client);
+            let mem = CreateCompatibleDC(hdc);
+            let bmp = CreateCompatibleBitmap(hdc, client.right.max(1), client.bottom.max(1));
+            let old = SelectObject(mem, bmp);
             UI.with(|u| {
                 if let Ok(u) = u.try_borrow() {
                     if let Some(u) = u.as_ref() {
-                        paint(u, hdc);
+                        paint(u, mem, &client);
                     }
                 }
             });
+            let r = ps.rcPaint;
+            BitBlt(hdc, r.left, r.top, r.right - r.left, r.bottom - r.top, mem, r.left, r.top, SRCCOPY);
+            SelectObject(mem, old);
+            DeleteObject(bmp);
+            DeleteDC(mem);
             EndPaint(hwnd, &ps);
             0
         }
         WM_CTLCOLOREDIT | WM_CTLCOLORSTATIC | WM_CTLCOLORBTN => {
             let hdc = wp as HDC;
-            let Some((edit, card, bg)) = with(|u| (u.edit, u.br_card, u.br_bg)) else {
+            let Some((on_card, card, bg)) =
+                with(|u| (lp as HWND == u.edit || u.components.contains(&(lp as HWND)), u.br_card, u.br_bg))
+            else {
                 return DefWindowProcW(hwnd, msg, wp, lp);
             };
             SetTextColor(hdc, FG);
-            if lp as HWND == edit {
+            if on_card {
                 SetBkColor(hdc, CARD);
                 card as LRESULT
             } else {
@@ -570,7 +734,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         }
         WM_SETCURSOR => {
             let over = wp as HWND;
-            let button = with(|u| over == u.browse || over == u.install).unwrap_or(false);
+            let button = with(|u| over == u.browse || over == u.install || over == u.back).unwrap_or(false);
             if button && IsWindowEnabled(over) != 0 {
                 SetCursor(LoadCursorW(std::ptr::null_mut(), IDC_HAND));
                 return 1;
@@ -580,11 +744,21 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         WM_COMMAND => {
             match (wp & 0xFFFF) as i32 {
                 ID_INSTALL => {
-                    let (busy, done) = with(|u| (u.busy, u.done)).unwrap_or((false, false));
+                    let (busy, done, step) = with(|u| (u.busy, u.done, u.step)).unwrap_or((false, false, 0));
                     if done {
                         DestroyWindow(hwnd);
+                    } else if !busy && step + 1 < l::STEPS {
+                        if install_dir().is_some() {
+                            set_step(hwnd, step + 1);
+                        }
                     } else if !busy {
                         start_install(hwnd);
+                    }
+                }
+                ID_BACK => {
+                    let (stuck, step) = with(|u| (u.busy || u.done, u.step)).unwrap_or((true, 0));
+                    if !stuck && step > 0 {
+                        set_step(hwnd, step - 1);
                     }
                 }
                 ID_CANCEL => {
@@ -600,9 +774,13 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             0
         }
         WM_TIMER => {
-            if let Some(r) = with(|u| {
+            if wp == TIMER_GIF {
+                if let Some(r) = tick_gif() {
+                    InvalidateRect(hwnd, &r, 0);
+                }
+            } else if let Some(r) = with(|u| {
                 u.anim += u.px(6);
-                u.rect(BAR)
+                u.rect(l::BAR)
             }) {
                 InvalidateRect(hwnd, &r, 0);
             }

@@ -13,9 +13,10 @@
 
 1. Download **`TTLcdStudio-Setup.exe`** from the [latest release](https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD/releases)
    (or the newest run on the [Actions](https://github.com/anatolijphp/Thermaltake-TH240-V2-ULTRA-LCD/actions) tab).
-2. Run it. It installs per user to `%LOCALAPPDATA%\Programs\TT LCD Studio`, **no administrator rights needed**, and
-   can add a Start menu shortcut and start with Windows.
-3. Optional parts ask for administrator rights when you pick them:
+2. Run it. The first step picks the folder (default per user, `%LOCALAPPDATA%\Programs\TT LCD Studio`, **no
+   administrator rights needed**) and adds a Start menu shortcut and start with Windows.
+3. Then each optional component gets its own step, with a short animation of what it adds to the LCD. Each asks
+   for administrator rights when you pick it, and can also be added later from Studio:
    - **CPU temperature service** (reads the CPU temperature through TOWEI's sensor driver, which must be installed)
    - **Armoury Crate plugin** (Aura Sync)
    - **Virtual display driver** (for Wallpaper Engine)
