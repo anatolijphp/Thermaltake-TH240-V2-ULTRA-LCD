@@ -2527,6 +2527,7 @@ dependencies = [
 name = "ttlcd-setup"
 version = "2.2.0"
 dependencies = [
+ "gif",
  "miniz_oxide 0.9.1",
  "windows",
  "windows-sys 0.61.2",
