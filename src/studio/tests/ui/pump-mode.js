@@ -27,6 +27,27 @@ await T.wait(800);
 T.ok('switching it is stored', cfg().PumpAura === !aura);
 T.send({ t: 'set', k: 'PumpAura', v: aura });
 T.send({ t: 'set', k: 'PumpFan', v: fan });
+// 2026-10-17: the view can be tilted up to 30 degrees in any direction: the pad shows where the eye is and says it
+// in words; a value past 30 (e.g. from `ttlcd set`) is shown on the ring, as the renderer holds it there
+const pad = T.$('#pump-view');
+T.ok('a "View from" pad is offered', !!pad && /View from/.test(text()));
+const view = [cfg().PumpViewX, cfg().PumpViewY];
+T.send({ t: 'set', k: 'PumpViewX', v: 20 });
+T.send({ t: 'set', k: 'PumpViewY', v: -10 });
+await T.wait(800);
+T.ok('the tilt is stored for the renderer', cfg().PumpViewX === 20 && cfg().PumpViewY === -10, `${cfg().PumpViewX},${cfg().PumpViewY}`);
+T.ok('the pad says it in words', /20° right, 10° up/.test(text()));
+const dot = pad && pad.querySelector('.dot');
+T.ok('the dot sits right of and above the centre', !!dot && parseFloat(dot.style.left) > 50 && parseFloat(dot.style.top) < 50, dot && `${dot.style.left} ${dot.style.top}`);
+T.send({ t: 'set', k: 'PumpViewX', v: 60 });
+T.send({ t: 'set', k: 'PumpViewY', v: 0 });
+await T.wait(800);
+T.ok('past 30 it shows 30', /30° right/.test(text()) && Math.abs(parseFloat(dot.style.left) - 100) < 0.5, dot && dot.style.left);
+T.send({ t: 'set', k: 'PumpViewX', v: 0 });
+await T.wait(500);
+T.ok('straight down', /Straight down/.test(text()));
+T.send({ t: 'set', k: 'PumpViewX', v: view[0] });
+T.send({ t: 'set', k: 'PumpViewY', v: view[1] });
 // the live preview shows the frames the mode renders: they keep coming
 const live = T.$('img.live');
 const first = live && live.getAttribute('src');

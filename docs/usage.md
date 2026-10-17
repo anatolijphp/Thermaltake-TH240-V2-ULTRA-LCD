@@ -32,20 +32,25 @@ it; click it again to close its style.
 
 ## Pump
 
-The screen becomes a window into the pump: a dark metal impeller spinning in the coolant, the water coming in at the
-top left, going round and out at the top right, carrying bubbles and specks (a few drift on their own). The LEDs
-around the pump head (left, bottom and right) light the water and catch the blade edges.
+The screen becomes a window into the pump, drawn in 3D: a turbo impeller of smoked black glass spins over an AM5
+CPU, the water coming in at the top left, going round and out at the top right, carrying bubbles and specks (some
+are sucked into the middle, a few drift on their own). The light is the LED strip around the pump head (left,
+bottom and right): it glows in the water, catches the glass's edges and shows the CPU through the glass. When the
+LEDs fade out, a faint glow in their last colour stays.
 
 <img src="media/pump.gif" alt="Display modes: choosing Pump, the preview spinning at the CPU fan's speed, then the speed set by hand from slow to fast and the coolant colour changed" width="860">
 
 - **Speed from:** the impeller turns at the speed of a motherboard fan header: the **CPU fan** unless you pick
   another one (the header your pump is on), or **set by hand**. The options show the speed it uses now. Fan speeds
   are read on Linux (the kernel's hwmon sensors); on Windows the speed is set by hand for now.
-- **Coolant:** the colour of the water.
+- **Coolant:** the colour of the water: the LEDs' light glows through it in that colour (white is clear water).
 - **Light:** constant red with a gentle flicker, or **from Aura Sync**: the light then takes the colours and effect
   of the Aura LEDs (Breathing, Rainbow, ...), spread along the three lit sides.
+- **View from:** drag the dot to look at the pump from the side, up to 30° in any direction (double-click for
+  straight down). From the command line: `ttlcd set PumpViewX 20`, `ttlcd set PumpViewY -10`.
 
-At speed the blades blur like a camera sees them; stopped, you see every blade.
+At speed the blades blur like a camera sees them, while the CPU under the glass stays sharp; stopped, you see every
+blade.
 
 ## Game mode
 

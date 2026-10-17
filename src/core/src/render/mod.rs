@@ -1,6 +1,6 @@
 //! Frames for the 480x480 round panel: composing pictures (fill/crop or fit), rotation, JPEG, messages, and the
 //! clock / overlay readings (readings.rs). Everything draws into tiny-skia pixmaps (opaque RGBA).
-pub mod pump;
+pub mod pump3d;
 pub mod readings;
 pub mod text;
 

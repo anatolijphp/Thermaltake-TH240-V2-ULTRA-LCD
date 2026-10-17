@@ -9,6 +9,7 @@ import Slider, { unit } from '../../components/Slider/Slider.jsx';
 import Swatches from '../../components/Swatches/Swatches.jsx';
 import Switch from '../../components/Switch/Switch.jsx';
 import TextField from '../../components/TextField/TextField.jsx';
+import TiltPad from '../../components/TiltPad/TiltPad.jsx';
 import ModeTiles from './ModeTiles/ModeTiles.jsx';
 import LineEditor from './LineEditor/LineEditor.jsx';
 import VideoEditor from './VideoEditor/VideoEditor.jsx';
@@ -92,6 +93,10 @@ export default function Modes() {
             <Row kind="2" label="Coolant"><Swatches palette={S.palette} value={c.PumpColor} onPick={(v) => setCfg('PumpColor', v)} /></Row>
             <Row kind="2" label="Light">
               <Switch on={c.PumpAura} onChange={(v) => setCfg('PumpAura', v)}>From Aura Sync (otherwise red)</Switch>
+            </Row>
+            <Row kind="2" label="View from" top>
+              <TiltPad id="pump-view" x={c.PumpViewX} y={c.PumpViewY} max={30}
+                onInput={(x, y) => { setCfg('PumpViewX', x); setCfg('PumpViewY', y); }} />
             </Row>
           </div>
         )}

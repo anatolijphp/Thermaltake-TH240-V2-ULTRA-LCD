@@ -25,7 +25,7 @@ pub fn mode_description(m: Mode) -> String {
         Mode::Aura if linux && !crate::aura::linux_service_installed() => "Needs armory-crate, the Linux Aura Sync service, which isn't installed. Install it (./packaging/install.sh in its folder), then run: systemctl --user enable --now armory-crated and armory-crate virtual add ttlcd. This mode turns on by itself once it's there.".into(),
         Mode::Aura if linux => "Follows Aura Sync from armory-crate: its effect and colours drive an abstract visualiser on the LCD. Add the screen there once with: armory-crate virtual add ttlcd".into(),
         Mode::Aura => "Adds the cooler screen to Armoury Crate as an Aura Sync device (\"TT LCD CL-W383\"). Its effects and colours drive an abstract visualiser on the LCD. Installing needs administrator rights and restarts the ASUS lighting service.".into(),
-        Mode::Pump => "A look inside the pump: the impeller spins in the coolant at the pump's speed and pushes the water round from the inlet to the outlet, lit by the LEDs around the pump head (red, or the colours from Aura Sync).".into(),
+        Mode::Pump => "A look inside the pump: a smoked-glass impeller over an AM5 CPU spins in the coolant at the pump's speed and pushes the water round from the inlet to the outlet, lit only by the LEDs around the pump head (red, or the colours from Aura Sync). Tilt the view up to 30° any way.".into(),
         Mode::Off => "The screen is blanked.".into(),
     }
 }

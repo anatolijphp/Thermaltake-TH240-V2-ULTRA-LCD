@@ -528,7 +528,7 @@ impl Engine {
                 // the LEDs round the pump head: Aura Sync's colours when chosen and available, else a flickering red
                 let aura = if c.PumpAura { st.aura.read() } else { None };
                 let (lights, light) = match &aura {
-                    Some(s) => (st.vis.lights(s, render::pump::LIGHTS), "Aura Sync light"),
+                    Some(s) => (st.vis.lights(s, render::pump3d::LIGHTS), "Aura Sync light"),
                     None if c.PumpAura => (st.pump.red_lights(), "red light (waiting for Aura Sync)"),
                     None => (st.pump.red_lights(), "red light"),
                 };
@@ -542,7 +542,9 @@ impl Engine {
                     Some((rpm, label)) => (rpm as f32, label),
                     None => (c.PumpRpm as f32, "set".to_string()),
                 };
-                let frame = st.pump.render(rpm, dt, c.PumpColor, &lights);
+                st.pump.set_coolant(c.PumpColor);
+                st.pump.set_view(c.PumpViewX as f32, c.PumpViewY as f32);
+                let frame = st.pump.render(rpm, dt, &lights);
                 Produced { frame, delay: stream_delay, note: Some(format!("Pump · {rpm:.0} rpm ({source}) · {light}")), direct: None }
             }
             Mode::Color => Produced { frame: render::blank(c.ColorRgb), delay: stream_delay, note: None, direct: None },
@@ -818,7 +820,7 @@ struct RenderState {
     video_idx: usize,
     aura: aura::Reader,
     vis: aura::Visualiser,
-    pump: render::pump::Pump,
+    pump: render::pump3d::Pump3d,
     pump_at: Option<std::time::Instant>,
     /// the pump speed read from a fan: (when, rpm, which fan), refreshed about once a second
     pump_fan: Option<(std::time::Instant, Option<(u32, String)>)>,

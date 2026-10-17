@@ -165,20 +165,29 @@ stopping the `ttlcd hwmon` helper, so the helper wasn't the cause. `ttlcd temp` 
 
 ## Pump mode
 
-`render/pump.rs`: a look inside the pump head (the LCD is the window: no case, fittings or glass drawn; the real
-case and glass are around it). Dark metal impeller turning anticlockwise; water in at the top left, round the
-chamber, out at the top right. Cached layers (machined floor with volute, the impeller disc with a brushed highlight
-fixed to the light, impeller sprite, blade-edge mask, shadow, water swirl) plus per frame: particles (Flow from inlet
-to outlet, Caught in the impeller then thrown out, Wander on their own; lit by the LEDs), the impeller
-motion-blurred by doubling (2^k evenly spaced copies in k passes), the LED light. Rule: the turning sprites (blades,
-hub) hold only what looks the same at any turn; every directional light or shadow (room light on the blades, the
-hub's shadow and shine, the LED shimmer) is applied fixed on screen each frame (`nothing_that_turns_carries_light_or_shadow`). The LEDs ring the pump head on the
-left, bottom and right (`LIGHTS` points along that arc): a soft light map (drawn at 120 px, scaled up) glows into
-the water and colours the blade-edge mask before the blur. Light = Aura Sync's LED colours with the effect applied
-(`aura::Visualiser::lights`, `PumpAura`) or a flickering red. Speed = rpm/1000 turns a second, from `PumpFan`: "" =
-CPU fan (`sensors::cpu_fan`: label "CPU", else nct67xx fan2, else first spinning), a fan id ("nct6799/fan7", hwmon;
-Linux only, Windows has no fan source yet) or "manual" (`PumpRpm`). ~8-21 ms a frame. `pump_dump` (ignored test)
-writes frames at several speeds, lights and coolant colours.
+`render/pump3d.rs` (2.3; the 2D `pump.rs` is gone): a small CPU 3D renderer. Look (approved step by step with the
+owner, renders in `build/design/`): a turbo compressor wheel (Ø140, 9 blades, 95 % of the image) of smoked black
+glass (~90 % opaque where thinnest, darker the thicker), on its round base, a steel socket cap screw in the middle,
+over an AM5 CPU (heat spreader outline, capacitor bays, gold triangle, etched "AMD RYZEN") spanning 95 % of the
+image, black around it. **The LED strips light it** (no room light or window: `the_led_strips_light_it`), plus a
+faint fill light in their last lit colour so a fade-out (Aura breathing) never goes black (`FILL`, `last_hue`). The
+coolant colour (`set_coolant`, linear) dyes the water: it scatters the LEDs' light through the dye, a saturated dye
+also glows in its own hue, and the floor is seen tinted through it (`the_coolant_colour_shows`; white = clear);
+the LCD's own glass is the cover, so nothing draws one. Pipeline per frame: rasterise triangles into a G-buffer
+(perspective `Camera`; with a tilt also straight down, as the height field for soft shadows), shade (GGX; glass =
+the floor bent by the surface slope with dispersion, edge lines + glints, LED light carried to cut edges), layers
+`floor * through + own` so the motion blur (`blur_layers`: each pixel's surface point turned back round the axis
+and re-projected, so it works tilted) smears only the wheel, then particles (Flow 25 %: swim in from off screen at
+the top left, out off screen at the top right while it spins; Circulate, Sucked to the nose, Caught, Wander).
+Caches: the floor's geometry per view (`floor_view`) and its response to each LED (`floor_response`: light is
+linear in the LED colours, so a frame's CPU is 9 multiply-adds a pixel). ~17-27 ms a frame on 12 threads.
+View: `PumpViewX`/`PumpViewY` degrees, clamped to 30 together (`clamp_tilt`), turning about the wheel's mid height;
+Studio's "View from" pad (`components/TiltPad`). Light = Aura Sync's LED colours (`aura::Visualiser::lights`,
+`PumpAura`) or a flickering red (`Pump3d::red_lights`); coolant colour tints the water glow. Speed = rpm/1000 turns
+a second, from `PumpFan`: "" = CPU fan (`sensors::cpu_fan`: label "CPU", else nct67xx fan2, else first spinning), a
+fan id ("nct6799/fan7", hwmon; Linux only, Windows has no fan source yet) or "manual" (`PumpRpm`).
+`pump3d_dump` / `pump3d_profile` (ignored tests) write frames (`TTLCD_DUMP=<dir>`, `TTLCD_GIF=<out.gif>`,
+`TTLCD_GIF_AURA=1`, `TTLCD_GIF_TILT=x,y`) and time frames; `Design` keeps the earlier dark metal look as an option.
 
 ## Game mode
 
