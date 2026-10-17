@@ -293,6 +293,10 @@ config! {
     PumpColor: i32 = 0x00D1FF,
     /// Pump mode: the LED light round the pump head follows Aura Sync (else a flickering red)
     PumpAura: bool = false,
+    /// Pump mode: the view tilted from straight down, degrees towards the picture's right (PumpViewX) and bottom
+    /// (PumpViewY), together at most 30 (render::pump3d::MAX_TILT)
+    PumpViewX: i32 = 0,
+    PumpViewY: i32 = 0,
     TextRgb: i32 = 0xFFFFFF,
     /// legacy; replaced by the Overlay* flags below
     Overlay: Overlay = Overlay::None,

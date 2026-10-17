@@ -1,0 +1,70 @@
+@use 'tokens' as *;
+
+.tiltpad {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  .pad {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    flex: none;
+    border-radius: 50%;
+    border: 1px solid $linehi;
+    background: radial-gradient(circle, $cardhi 0%, $card 70%);
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  .ring.half {
+    position: absolute;
+    inset: 25%;
+    border-radius: 50%;
+    border: 1px dashed $line;
+  }
+
+  .cross {
+    position: absolute;
+    background: $line;
+
+    &.h {
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 1px;
+    }
+
+    &.v {
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+    }
+  }
+
+  .line {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    height: 2px;
+    margin-top: -1px;
+    transform-origin: 0 50%;
+    background: linear-gradient(90deg, #7A1028, $accent);
+  }
+
+  .dot {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid $accent;
+    box-shadow: $glowsoft;
+  }
+
+  .val {
+    color: $dim;
+  }
+}
